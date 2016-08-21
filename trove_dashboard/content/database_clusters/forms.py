@@ -60,7 +60,7 @@ class LaunchForm(forms.SelfHandlingForm):
     volume = forms.IntegerField(
         label=_("Volume Size"),
         min_value=0,
-        initial=1,
+        initial=getattr(settings, "TROVE_DEFAULT_CLUSTER_VOL_SIZE", 1),
         help_text=_("Size of the volume in GB."))
     region = forms.ChoiceField(
         label=_("Region"),
