@@ -51,7 +51,9 @@ class SetInstanceDetailsAction(workflows.Action):
     name = forms.CharField(max_length=80, label=_("Instance Name"))
     volume = forms.IntegerField(label=_("Volume Size"),
                                 min_value=0,
-                                initial=1,
+                                initial=getattr(settings,
+                                                "TROVE_DEFAULT_VOL_SIZE",
+                                                1),
                                 help_text=_("Size of the volume in GB."))
     datastore = forms.ChoiceField(
         label=_("Datastore"),
