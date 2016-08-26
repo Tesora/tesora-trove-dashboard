@@ -68,8 +68,6 @@ class DetailView(views.APIView):
             schedule = self.get_schedule_detail(request, schedule_id)
             schedule_input = json.loads(schedule.input)
             schedule.description = schedule_input['description']
-            if schedule_input.get('parent_id', None):
-                schedule.parent_id = schedule_input['parent_id']
             context['schedule'] = schedule
         except Exception:
             redirect = reverse(

@@ -117,7 +117,6 @@ class ScheduleTests(test.TestCase):
         res = self.client.get(DETAILS_URL)
         self.assertTemplateUsed(res, 'project/databases/schedules/'
                                      'detail.html')
-        self.assertContains(res, "Parent ID")
         self.assertContains(res, "description of backup1")
 
     @test.create_stubs({
@@ -132,7 +131,6 @@ class ScheduleTests(test.TestCase):
         res = self.client.get(DETAILS_URL)
         self.assertTemplateUsed(res, 'project/databases/schedules/'
                                      'detail.html')
-        self.assertNotContains(res, "Parent ID")
         self.assertContains(res, "description of backup2")
 
     @test.create_stubs({
@@ -181,7 +179,6 @@ class ScheduleTests(test.TestCase):
                                    IsA(six.text_type),
                                    IsA(six.text_type),
                                    description=IsA(six.text_type),
-                                   parent_id=IsA(six.text_type),
                                    mistral_client=self.stub_mistralclient())
             .AndReturn(new_schedule))
 

@@ -522,10 +522,10 @@ def execution_list(request, schedule, mistral_client=None, marker=''):
 
 
 def schedule_create(request, instance, pattern, name, description=None,
-                    parent_id=None, mistral_client=None):
+                    mistral_client=None):
     return troveclient(request).backups.schedule_create(
         instance, pattern, name, description=description,
-        parent_id=parent_id, mistral_client=mistral_client)
+        mistral_client=mistral_client)
 
 
 def schedule_delete(request, schedule, mistral_client=None):

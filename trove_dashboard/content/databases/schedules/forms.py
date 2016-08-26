@@ -32,11 +32,6 @@ class CreateScheduleForm(forms.SelfHandlingForm):
     description = forms.CharField(
         label=_("Description"),
         required=False)
-    parent_id = forms.CharField(
-        widget=forms.HiddenInput(),
-        label=_("Parent ID"),
-        required=False,
-        help_text=_("Base for incremental backup."))
 
     def __init__(self, request, *args, **kwargs):
         super(CreateScheduleForm, self).__init__(request, *args, **kwargs)
@@ -53,7 +48,6 @@ class CreateScheduleForm(forms.SelfHandlingForm):
                 data.get('pattern'),
                 data.get('name'),
                 description=data.get('description'),
-                parent_id=data.get('parent_id'),
                 mistral_client=api.trove.mistralclient(self.request))
             messages.success(
                 request, _('Creating Schedule "%s"') % data.get('name'))
