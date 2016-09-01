@@ -180,6 +180,39 @@ DATABASE_DATA_TWO = {
     "id": "4d7b3f57-44f5-41d2-8e86-36b88cad572a",
 }
 
+DATABASE_DATA_THREE = {
+    "status": "ACTIVE",
+    "updated": "2015-01-12T22:00:09",
+    "name": "Test Database with Config",
+    "links": [],
+    "created": "2015-01-12T22:00:03",
+    "ip": [
+        "10.0.0.3",
+    ],
+    "volume": {
+        "used": 0.13,
+        "size": 1,
+    },
+    "flavor": {
+        "id": "1",
+        "links": [],
+    },
+    "datastore": {
+        "type": "mysql",
+        "version": "5.5"
+    },
+    "id": "c3369597-b53a-4bd4-bf54-41957c1291b8",
+    "configuration": {
+        "id": "0ef978d3-7c83-4192-ab86-b7a0a5010fa0",
+        "links": [],
+        "name": "config1"
+    },
+    "replicas": {
+        "id": "0ef978d3-7c83-4192-ab86-b7a0a5010fa0",
+        "links": [],
+    }
+}
+
 BACKUP_ONE = {
     "instance_id": "6ddc36d9-73db-4e23-b52e-368937d72719",
     "status": "COMPLETED",
@@ -278,7 +311,6 @@ VERSION_TWO = {
     "name": "5.6",
     "links": [],
     "image": "c7956bb5-920e-4299-b68e-2347d830d938",
-    "active": 1,
     "datastore": "537fb940-b5eb-40d9-bdbd-91a3dcb9c17d",
     "packages": "5.6",
     "id": "500a6d52-8347-4e00-8e4c-f4fa9cf96ae9"
@@ -335,6 +367,42 @@ VERSION_VERTICA_7_1 = {
     "id": "600a6d52-8347-4e00-8e4c-f4fa9cf96af1"
 }
 
+LOG_1 = {
+    "name": "guest",
+    "type": "SYS",
+    "status": "Partial",
+    "published": 5000,
+    "pending": 100,
+    "container": "guest_container"
+}
+
+LOG_2 = {
+    "name": "slow_query",
+    "type": "USER",
+    "status": "Disabled",
+    "published": 0,
+    "pending": 0,
+    "container": "None"
+}
+
+LOG_3 = {
+    "name": "error",
+    "type": "SYS",
+    "status": "Unavailable",
+    "published": 0,
+    "pending": 0,
+    "container": "None"
+}
+
+LOG_4 = {
+    "name": "general",
+    "type": "USER",
+    "status": "Ready",
+    "published": 0,
+    "pending": 1000,
+    "container": "None"
+}
+
 
 def data(TEST):
     cluster1 = clusters.Cluster(clusters.Clusters(None),
@@ -345,6 +413,8 @@ def data(TEST):
                                    DATABASE_DATA_ONE)
     database2 = instances.Instance(instances.Instances(None),
                                    DATABASE_DATA_TWO)
+    database3 = instances.Instance(instances.Instances(None),
+                                   DATABASE_DATA_THREE)
     bkup1 = backups.Backup(backups.Backups(None), BACKUP_ONE)
     bkup2 = backups.Backup(backups.Backups(None), BACKUP_TWO)
     bkup3 = backups.Backup(backups.Backups(None), BACKUP_TWO_INC)
@@ -379,6 +449,11 @@ def data(TEST):
         DatastoreVersion(datastores.DatastoreVersions(None),
                          VERSION_VERTICA_7_1)
 
+    log1 = instances.DatastoreLog(instances.Instances(None), LOG_1)
+    log2 = instances.DatastoreLog(instances.Instances(None), LOG_2)
+    log3 = instances.DatastoreLog(instances.Instances(None), LOG_3)
+    log4 = instances.DatastoreLog(instances.Instances(None), LOG_4)
+
     TEST.trove_clusters = utils.TestDataContainer()
     TEST.trove_clusters.add(cluster1)
     TEST.trove_clusters.add(cluster2)
@@ -391,6 +466,7 @@ def data(TEST):
 
     TEST.databases.add(database1)
     TEST.databases.add(database2)
+    TEST.databases.add(database3)
     TEST.database_backups.add(bkup1)
     TEST.database_backups.add(bkup2)
     TEST.database_backups.add(bkup3)
@@ -408,3 +484,6 @@ def data(TEST):
     TEST.datastore_versions.add(version_redis_3_0)
     TEST.datastore_versions.add(version_mongodb_2_6)
     TEST.datastore_versions.add(version1)
+
+    TEST.logs = utils.TestDataContainer()
+    TEST.logs.add(log1, log2, log3, log4)

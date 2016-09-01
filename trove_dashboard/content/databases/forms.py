@@ -60,6 +60,14 @@ class ResizeVolumeForm(forms.SelfHandlingForm):
     )
     new_size = forms.IntegerField(label=_("New Size (GB)"))
 
+    def __init__(self, request, *args, **kwargs):
+        super(ResizeVolumeForm, self).__init__(request, *args, **kwargs)
+
+        self.fields['instance_id'].initial = (kwargs.get('initial', {}).
+                                              get('instance_id'))
+        self.fields['orig_size'].initial = (kwargs.get('initial', {}).
+                                            get('orig_size'))
+
     def clean(self):
         cleaned_data = super(ResizeVolumeForm, self).clean()
         new_size = cleaned_data.get('new_size')
@@ -119,6 +127,26 @@ class ResizeInstanceForm(forms.SelfHandlingForm):
             redirect = reverse("horizon:project:databases:index")
             exceptions.handle(request, _('Unable to resize instance. %s') %
                               e.message, redirect=redirect)
+        return True
+
+
+class PromoteToReplicaSourceForm(forms.SelfHandlingForm):
+    instance_id = forms.CharField(widget=forms.HiddenInput())
+
+    def handle(self, request, data):
+        instance_id = data.get('instance_id')
+        name = self.initial['replica'].name
+        try:
+            api.trove.promote_to_replica_source(request, instance_id)
+            messages.success(
+                request,
+                _('Promoted replica "%s" as the new replica source.') % name)
+        except Exception as e:
+            redirect = reverse("horizon:project:databases:index")
+            exceptions.handle(
+                request,
+                _('Unable to promote replica as the new replica source.  "%s"')
+                % e.message, redirect=redirect)
         return True
 
 
