@@ -25,6 +25,9 @@ from horizon import workflows
 from openstack_dashboard import api as dash_api
 from openstack_dashboard.dashboards.project.instances \
     import utils as instance_utils
+from openstack_dashboard.dashboards.project.instances.workflows \
+    import create_instance as dash_create_instance
+
 
 from trove_dashboard import api
 
@@ -120,6 +123,8 @@ class SetInstanceDetailsAction(workflows.Action):
                     # only add to choices if datastore has at least one version
                     version_choices = ()
                     for v in versions:
+                        if hasattr(v, 'active') and not v.active:
+                            continue
                         version_choices = (version_choices +
                                            ((ds.name + ',' + v.name, v.name),))
                     datastore_choices = (ds.name, version_choices)
@@ -140,58 +145,6 @@ TROVE_ADD_PERMS = TROVE_ADD_USER_PERMS + TROVE_ADD_DATABASE_PERMS
 class SetInstanceDetails(workflows.Step):
     action_class = SetInstanceDetailsAction
     contributes = ("name", "volume", "volume_type", "flavor", "datastore")
-
-
-class SetNetworkAction(workflows.Action):
-    network = forms.MultipleChoiceField(label=_("Networks"),
-                                        widget=forms.CheckboxSelectMultiple(),
-                                        error_messages={
-                                            'required': _(
-                                                "At least one network must"
-                                                " be specified.")},
-                                        help_text=_("Launch instance with"
-                                                    " these networks"))
-
-    def __init__(self, request, *args, **kwargs):
-        super(SetNetworkAction, self).__init__(request, *args, **kwargs)
-        network_list = self.fields["network"].choices
-        if len(network_list) == 1:
-            self.fields['network'].initial = [network_list[0][0]]
-
-    class Meta(object):
-        name = _("Networking")
-        permissions = ('openstack.services.network',)
-        help_text = _("Select networks for your instance.")
-
-    def populate_network_choices(self, request, context):
-        try:
-            tenant_id = self.request.user.tenant_id
-            networks = dash_api.neutron.network_list_for_tenant(request,
-                                                                tenant_id)
-            network_list = [(network.id, network.name_or_id)
-                            for network in networks]
-        except Exception:
-            network_list = []
-            exceptions.handle(request,
-                              _('Unable to retrieve networks.'))
-        return network_list
-
-
-class SetNetwork(workflows.Step):
-    action_class = SetNetworkAction
-    template_name = "project/databases/_launch_networks.html"
-    contributes = ("network_id",)
-
-    def contribute(self, data, context):
-        if data:
-            networks = self.workflow.request.POST.getlist("network")
-            # If no networks are explicitly specified, network list
-            # contains an empty string, so remove it.
-            networks = [n for n in networks if n != '']
-            if networks:
-                context['network_id'] = networks
-
-        return context
 
 
 class AddDatabasesAction(workflows.Action):
@@ -270,6 +223,17 @@ class AdvancedAction(workflows.Action):
             'data-switch-on': 'initial_state',
             'data-initial_state-master': _('Master Instance Name')
         }))
+    replica_count = forms.IntegerField(
+        label=_('Replica Count'),
+        required=False,
+        min_value=1,
+        initial=1,
+        help_text=_('Specify the number of replicas to be created'),
+        widget=forms.TextInput(attrs={
+            'class': 'switched',
+            'data-switch-on': 'initial_state',
+            'data-initial_state-master': _('Replica Count')
+        }))
 
     class Meta(object):
         name = _("Advanced")
@@ -289,11 +253,21 @@ class AdvancedAction(workflows.Action):
             choices.insert(0, ("", _("No backups available")))
         return choices
 
+    def _get_instances(self):
+        instances = []
+        try:
+            instances = api.trove.instance_list_all(self.request)
+        except Exception:
+            msg = _('Unable to retrieve database instances.')
+            exceptions.handle(self.request, msg)
+        return instances
+
     def populate_master_choices(self, request, context):
         try:
-            instances = api.trove.instance_list(request)
-            choices = [(i.id, i.name) for i in
-                       instances if i.status == 'ACTIVE']
+            instances = self._get_instances()
+            choices = sorted([(i.id, i.name) for i in
+                             instances if i.status == 'ACTIVE'],
+                             key=lambda i: i[1])
         except Exception:
             choices = []
 
@@ -309,6 +283,7 @@ class AdvancedAction(workflows.Action):
         initial_state = cleaned_data.get("initial_state")
 
         if initial_state == 'backup':
+            cleaned_data['replica_count'] = None
             backup = self.cleaned_data['backup']
             if backup:
                 try:
@@ -336,13 +311,14 @@ class AdvancedAction(workflows.Action):
         else:
             cleaned_data['master'] = None
             cleaned_data['backup'] = None
+            cleaned_data['replica_count'] = None
 
         return cleaned_data
 
 
 class Advanced(workflows.Step):
     action_class = AdvancedAction
-    contributes = ['backup', 'master']
+    contributes = ['backup', 'master', 'replica_count']
 
 
 class LaunchInstance(workflows.Workflow):
@@ -353,7 +329,7 @@ class LaunchInstance(workflows.Workflow):
     failure_message = _('Unable to launch %(count)s named "%(name)s".')
     success_url = "horizon:project:databases:index"
     default_steps = (SetInstanceDetails,
-                     SetNetwork,
+                     dash_create_instance.SetNetwork,
                      InitializeDatabase,
                      Advanced)
 
@@ -417,13 +393,13 @@ class LaunchInstance(workflows.Workflow):
                      "{name=%s, volume=%s, volume_type=%s, flavor=%s, "
                      "datastore=%s, datastore_version=%s, "
                      "dbs=%s, users=%s, "
-                     "backups=%s, nics=%s, replica_of=%s}",
+                     "backups=%s, nics=%s, replica_of=%s replica_count=%s}",
                      context['name'], context['volume'],
                      self._get_volume_type(context), context['flavor'],
                      datastore, datastore_version,
                      self._get_databases(context), self._get_users(context),
                      self._get_backup(context), self._get_nics(context),
-                     context.get('master'))
+                     context.get('master'), context['replica_count'])
             api.trove.instance_create(request,
                                       context['name'],
                                       context['volume'],
@@ -435,6 +411,7 @@ class LaunchInstance(workflows.Workflow):
                                       restore_point=self._get_backup(context),
                                       nics=self._get_nics(context),
                                       replica_of=context.get('master'),
+                                      replica_count=context['replica_count'],
                                       volume_type=self._get_volume_type(
                                           context))
             return True
