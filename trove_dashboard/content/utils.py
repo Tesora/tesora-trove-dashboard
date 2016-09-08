@@ -13,6 +13,7 @@
 #    under the License.
 
 
+import binascii
 import logging
 
 from django.utils.translation import pgettext_lazy
@@ -107,3 +108,42 @@ def volume_type_field_data(request, include_empty_option=False):
     if include_empty_option:
         return [("", _("No volume types available")), ]
     return []
+
+
+def parse_datastore_and_version_text(encoded_datastore_and_version):
+    if encoded_datastore_and_version:
+        datastore_and_version = binascii.unhexlify(
+            encoded_datastore_and_version)
+        datastore, datastore_version = datastore_and_version.split('-', 1)
+        return datastore.strip(), datastore_version.strip()
+    return None, None
+
+
+def build_widget_field_name(datastore, datastore_version):
+    # Since the fieldnames cannot contain an uppercase character
+    # we generate a hex encoded string representation of the
+    # datastore and version as the fieldname
+    return binascii.hexlify(
+        build_datastore_display_text(datastore, datastore_version))
+
+
+def build_datastore_display_text(datastore, datastore_version):
+    return datastore + ' - ' + datastore_version
+
+
+def build_flavor_field_name(datastore, datastore_version):
+    return 'flavor-' + \
+           build_widget_field_name(datastore,
+                                   datastore_version)
+
+
+def build_volume_type_field_name(datastore, datastore_version):
+    return 'volume-type-' + \
+           build_widget_field_name(datastore,
+                                   datastore_version)
+
+
+def build_config_field_name(datastore, datastore_version):
+    return 'config-' + \
+           build_widget_field_name(datastore,
+                                   datastore_version)

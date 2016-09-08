@@ -13,7 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import binascii
 import logging
 
 import django
@@ -33,6 +32,7 @@ from trove_dashboard.content.databases import forms
 from trove_dashboard.content.databases import tables
 from trove_dashboard.content.databases import views
 from trove_dashboard.content.databases.workflows import create_instance
+from trove_dashboard.content import utils
 from trove_dashboard.test import helpers as test
 
 INDEX_URL = reverse('horizon:project:databases:index')
@@ -282,8 +282,8 @@ class DatabaseTests(test.TestCase):
 
         datastore = 'mysql'
         datastore_version = '5.5'
-        field_name = self._build_flavor_widget_name(datastore,
-                                                    datastore_version)
+        field_name = utils.build_widget_field_name(datastore,
+                                                   datastore_version)
         # Actual create database call
         api.trove.instance_create(
             IsA(http.HttpRequest),
@@ -372,8 +372,8 @@ class DatabaseTests(test.TestCase):
 
         datastore = 'mysql'
         datastore_version = '5.5'
-        field_name = self._build_flavor_widget_name(datastore,
-                                                    datastore_version)
+        field_name = utils.build_widget_field_name(datastore,
+                                                   datastore_version)
         # Actual create database call
         api.trove.instance_create(
             IsA(http.HttpRequest),
@@ -1128,8 +1128,8 @@ class DatabaseTests(test.TestCase):
 
         datastore = 'mysql'
         datastore_version = '5.5'
-        field_name = self._build_flavor_widget_name(datastore,
-                                                    datastore_version)
+        field_name = utils.build_widget_field_name(datastore,
+                                                   datastore_version)
         # Actual create database call
         api.trove.instance_create(
             IsA(http.HttpRequest),
@@ -1400,10 +1400,3 @@ class DatabaseTests(test.TestCase):
         advanced_page = create_instance.AdvancedAction(request, None)
         choices = advanced_page.populate_master_choices(request, None)
         self.assertTrue(len(choices) == len(self.databases.list()) + 1)
-
-    def _build_datastore_display_text(self, datastore, datastore_version):
-        return datastore + ' - ' + datastore_version
-
-    def _build_flavor_widget_name(self, datastore, datastore_version):
-        return binascii.hexlify(self._build_datastore_display_text(
-            datastore, datastore_version))
