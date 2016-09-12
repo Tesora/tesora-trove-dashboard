@@ -32,8 +32,10 @@ from horizon.utils import memoized
 
 from trove_dashboard import api
 from trove_dashboard.content.database_clusters import cluster_manager
-from trove_dashboard.content.database_clusters.upgrade \
-    import tables as upgrade_tables
+from trove_dashboard.content.database_clusters.couchbase import (
+    tables as couchbase_tables)
+from trove_dashboard.content.database_clusters.upgrade import (
+    tables as upgrade_tables)
 from trove_dashboard.content.databases import db_capability
 from trove_dashboard.content import utils as database_utils
 
@@ -290,7 +292,7 @@ class InstancesTable(tables.DataTable):
     class Meta(object):
         name = "instances"
         verbose_name = _("Instances")
-        row_actions = (CreateBackup,)
+        row_actions = (CreateBackup, couchbase_tables.ManageBuckets,)
 
 
 class ClusterShrinkAction(tables.BatchAction):

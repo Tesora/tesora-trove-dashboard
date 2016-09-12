@@ -25,12 +25,12 @@ from horizon.templatetags import sizeformat
 from horizon.utils import filters
 
 from trove_dashboard import api
-from trove_dashboard.content.database_backups \
-    import tables as backup_tables
-from trove_dashboard.content.databases.schedules \
-    import tables as schedules_tables
-from trove_dashboard.content.databases.upgrade \
-    import tables as upgrade_tables
+from trove_dashboard.content.database_backups import tables as backup_tables
+from trove_dashboard.content.databases.couchbase import (
+    tables as couchbase_tables)
+from trove_dashboard.content.databases.schedules import (
+    tables as schedules_tables)
+from trove_dashboard.content.databases.upgrade import tables as upgrade_tables
 from trove_dashboard.content import utils as database_utils
 
 
@@ -692,6 +692,7 @@ class InstancesTable(tables.DataTable):
                        ManageRoot,
                        upgrade_tables.UpgradeInstanceAction,
                        schedules_tables.ViewSchedules,
+                       couchbase_tables.ManageBuckets,
                        RestartInstance,
                        DeleteInstance,
                        ResetStatusAction,

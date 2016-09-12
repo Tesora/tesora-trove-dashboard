@@ -62,6 +62,42 @@ def mistralclient(request):
                                  insecure=insecure)
 
 
+def bucket_create(request, instance_id, name, password, bucket_ramsize=None,
+                  bucket_replica=None, enable_index_replica=None,
+                  bucket_eviction_policy=None, bucket_priority=None):
+    return user_create(request, instance_id, name, password,
+                       bucket_ramsize=bucket_ramsize,
+                       bucket_replica=bucket_replica,
+                       enable_index_replica=enable_index_replica,
+                       bucket_eviction_policy=bucket_eviction_policy,
+                       bucket_priority=bucket_priority)
+
+
+def bucket_delete(request, instance_id, name):
+    return user_delete(request, instance_id, name)
+
+
+def bucket_get(request, instance_id, name):
+    return user_get(request, instance_id, name)
+
+
+def bucket_list(request, instance_id):
+    return users_list(request, instance_id)
+
+
+def bucket_update(request, instance_id, name,
+                  new_password=None, bucket_ramsize=None, bucket_replica=None,
+                  enable_index_replica=None, bucket_eviction_policy=None,
+                  bucket_priority=None):
+    return user_update_attributes(
+        request, instance_id, name, new_password=new_password,
+        bucket_ramsize=bucket_ramsize,
+        bucket_replica=bucket_replica,
+        enable_index_replica=enable_index_replica,
+        bucket_eviction_policy=bucket_eviction_policy,
+        bucket_priority=bucket_priority)
+
+
 def cluster_list(request, marker=None):
     page_size = utils.get_page_size(request)
     return troveclient(request).clusters.list(limit=page_size, marker=marker)
@@ -383,12 +419,26 @@ def users_list(request, instance_id):
 
 
 def user_create(request, instance_id, username, password,
-                host=None, databases=[], roles=None):
+                host=None, databases=[], roles=None,
+                # couchbase params
+                bucket_ramsize=None, bucket_replica=None,
+                enable_index_replica=False, bucket_eviction_policy=None,
+                bucket_priority=None
+                ):
     user = {'name': username, 'password': password, 'databases': databases}
     if host:
         user['host'] = host
     if roles:
         user['roles'] = roles
+    if bucket_ramsize:
+        user['bucket_ramsize'] = bucket_ramsize
+    if bucket_replica:
+        user['bucket_replica'] = bucket_replica
+    user['enable_index_replica'] = int(enable_index_replica)
+    if bucket_eviction_policy:
+        user['bucket_eviction_policy'] = bucket_eviction_policy
+    if bucket_priority:
+        user['bucket_priority'] = bucket_priority
 
     return troveclient(request).users.create(instance_id, [user])
 
@@ -397,8 +447,15 @@ def user_delete(request, instance_id, user, host=None):
     return troveclient(request).users.delete(instance_id, user, hostname=host)
 
 
+def user_get(request, instance_id, user_id, host=None):
+    return troveclient(request).users.get(instance_id, user_id, hostname=host)
+
+
 def user_update_attributes(request, instance_id, name, host=None,
-                           new_name=None, new_password=None, new_host=None):
+                           new_name=None, new_password=None, new_host=None,
+                           bucket_ramsize=None, bucket_replica=None,
+                           enable_index_replica=False,
+                           bucket_eviction_policy=None, bucket_priority=None):
     new_attributes = {}
     if new_name:
         new_attributes['name'] = new_name
@@ -406,6 +463,16 @@ def user_update_attributes(request, instance_id, name, host=None,
         new_attributes['password'] = new_password
     if new_host:
         new_attributes['host'] = new_host
+    if bucket_ramsize:
+        new_attributes['bucket_ramsize'] = bucket_ramsize
+    if bucket_replica:
+        new_attributes['bucket_replica'] = bucket_replica
+    new_attributes['enable_index_replica'] = int(enable_index_replica)
+    if bucket_eviction_policy:
+        new_attributes['bucket_eviction_policy'] = bucket_eviction_policy
+    if bucket_priority:
+        new_attributes['bucket_priority'] = bucket_priority
+
     return troveclient(request).users.update_attributes(
         instance_id, name, newuserattr=new_attributes, hostname=host)
 

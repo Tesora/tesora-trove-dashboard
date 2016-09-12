@@ -610,6 +610,19 @@ LOG_4 = {
 }
 
 
+class Bucket(object):
+    def __init__(self, name, password, bucket_ramsize, bucket_replica,
+                 enable_index_replica, bucket_eviction_policy,
+                 bucket_priority):
+        self.name = name
+        self.password = password
+        self.bucket_ramsize = bucket_ramsize
+        self.bucket_replica = bucket_replica
+        self.enable_index_replica = enable_index_replica
+        self.bucket_eviction_policy = bucket_eviction_policy
+        self.bucket_priority = bucket_priority
+
+
 def data(TEST):
     cluster1 = clusters.Cluster(clusters.Clusters(None),
                                 CLUSTER_DATA_ONE)
@@ -690,6 +703,25 @@ def data(TEST):
     region1 = "regionOne"
     region2 = "regionTwo"
 
+    TEST.trove_buckets = utils.TestDataContainer()
+    TEST.trove_buckets.add(
+        Bucket("bucket1",
+               password="password",
+               bucket_ramsize=512,
+               bucket_replica=1,
+               enable_index_replica=True,
+               bucket_eviction_policy="valueOnly",
+               bucket_priority="low",
+               ))
+    TEST.trove_buckets.add(
+        Bucket("bucket2",
+               password="password",
+               bucket_ramsize=512,
+               bucket_replica=1,
+               enable_index_replica=True,
+               bucket_eviction_policy="valueOnly",
+               bucket_priority="low",
+               ))
     TEST.trove_clusters = utils.TestDataContainer()
     TEST.trove_clusters.add(cluster1)
     TEST.trove_clusters.add(cluster2)
