@@ -461,16 +461,22 @@ class DatabaseTests(test.TestCase):
         database = self.databases.first()
         self._test_details(database, "Locality")
 
+    @test.create_stubs({api.trove: ('instance_get',)})
     def test_create_database(self):
         database = self.databases.first()
+
+        api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))\
+            .AndReturn(database)
+        self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_database',
                       args=[database.id])
         res = self.client.get(url)
         self.assertTemplateUsed(res, 'project/databases/create_database.html')
 
-    @test.create_stubs({api.trove: ('database_create',)})
+    @test.create_stubs({api.trove: ('database_create', 'instance_get',)})
     def test_create_new_database(self):
+        database = self.databases.first()
         new_database = {
             "status": "ACTIVE",
             "updated": "2013-08-12T22:00:09",
@@ -498,6 +504,8 @@ class DatabaseTests(test.TestCase):
         api.trove.database_create(
             IsA(http.HttpRequest), u'id', u'NewDB', character_set=u'',
             collation=u'').AndReturn(new_database)
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))
+            .AndReturn(database))
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_database',
@@ -511,11 +519,15 @@ class DatabaseTests(test.TestCase):
         self.assertNoFormErrors(res)
         self.assertMessageCount(success=1)
 
-    @test.create_stubs({api.trove: ('database_create',)})
+    @test.create_stubs({api.trove: ('database_create', 'instance_get')})
     def test_create_new_database_exception(self):
+        database = self.databases.first()
+
         api.trove.database_create(
             IsA(http.HttpRequest), u'id', u'NewDB', character_set=u'',
             collation=u'').AndRaise(self.exceptions.trove)
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))
+            .AndReturn(database))
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_database',
@@ -527,6 +539,38 @@ class DatabaseTests(test.TestCase):
 
         res = self.client.post(url, post)
         self.assertEqual(res.status_code, 302)
+
+    @test.create_stubs({api.trove: ('instance_get',)})
+    def test_create_new_database_optional_fields_mysql(self):
+        database = self.databases.first()
+
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))
+            .AndReturn(database))
+        self.mox.ReplayAll()
+
+        url = reverse('horizon:project:databases:create_database',
+                      args=['id'])
+        res = self.client.get(url)
+        character_set_field = res.context_data['form'].fields['character_set']
+        collation_field = res.context_data['form'].fields['collation']
+        self.assertFalse(character_set_field.widget.is_hidden)
+        self.assertFalse(collation_field.widget.is_hidden)
+
+    @test.create_stubs({api.trove: ('instance_get',)})
+    def test_create_new_database_optional_fields_not_mysql(self):
+        database = self.databases.list()[3]
+
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))
+            .AndReturn(database))
+        self.mox.ReplayAll()
+
+        url = reverse('horizon:project:databases:create_database',
+                      args=['id'])
+        res = self.client.get(url)
+        character_set_field = res.context_data['form'].fields['character_set']
+        collation_field = res.context_data['form'].fields['collation']
+        self.assertTrue(character_set_field.widget.is_hidden)
+        self.assertTrue(collation_field.widget.is_hidden)
 
     @test.create_stubs({api.trove: ('instance_get', 'root_show')})
     def test_show_root(self):

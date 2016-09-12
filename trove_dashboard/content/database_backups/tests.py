@@ -176,6 +176,9 @@ class DatabasesBackupsTests(test.TestCase):
         api.trove.instance_backups(IsA(http.HttpRequest),
                                    self.databases.list()[2]) \
             .AndReturn([])
+        api.trove.instance_backups(IsA(http.HttpRequest),
+                                   self.databases.list()[3]) \
+            .AndReturn([])
 
         self.mox.ReplayAll()
 
