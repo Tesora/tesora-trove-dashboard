@@ -134,6 +134,7 @@ class DatabaseTests(test.TestCase):
                     'instance_list'),
         dash_api.cinder: ('volume_type_list',),
         dash_api.neutron: ('network_list',),
+        dash_api.nova: ('availability_zone_list',),
         policy: ('check',),
     })
     def test_launch_instance(self):
@@ -165,6 +166,9 @@ class DatabaseTests(test.TestCase):
                                       shared=True).AndReturn(
                                           self.networks.list()[1:])
 
+        dash_api.nova.availability_zone_list(IsA(http.HttpRequest)) \
+            .AndReturn(self.availability_zones.list())
+
         self.mox.ReplayAll()
         res = self.client.get(LAUNCH_URL)
         self.assertTemplateUsed(res, 'project/databases/launch.html')
@@ -180,7 +184,7 @@ class DatabaseTests(test.TestCase):
         api.trove.flavor_list(IsA(http.HttpRequest)).AndRaise(trove_exception)
         self.mox.ReplayAll()
 
-        toSuppress = ["openstack_dashboard.dashboards.project.databases."
+        toSuppress = ["trove_dashboard.content.databases."
                       "workflows.create_instance",
                       "horizon.workflows.base"]
 
@@ -206,6 +210,7 @@ class DatabaseTests(test.TestCase):
                     'instance_create', 'instance_list'),
         dash_api.cinder: ('volume_type_list',),
         dash_api.neutron: ('network_list',),
+        dash_api.nova: ('availability_zone_list',),
         policy: ('check',),
     })
     def test_create_simple_instance(self):
@@ -246,6 +251,9 @@ class DatabaseTests(test.TestCase):
         datastore_version = '5.5'
         field_name = self._build_flavor_widget_name(datastore,
                                                     datastore_version)
+        dash_api.nova.availability_zone_list(IsA(http.HttpRequest)) \
+            .AndReturn(self.availability_zones.list())
+
         # Actual create database call
         api.trove.instance_create(
             IsA(http.HttpRequest),
@@ -261,7 +269,10 @@ class DatabaseTests(test.TestCase):
             users=None,
             nics=nics,
             replica_count=None,
-            volume_type=None).AndReturn(self.databases.first())
+            volume_type=None,
+            locality=None,
+            availability_zone=IsA(six.text_type)
+        ).AndReturn(self.databases.first())
 
         self.mox.ReplayAll()
         post = {
@@ -283,6 +294,7 @@ class DatabaseTests(test.TestCase):
                     'instance_create', 'instance_list'),
         dash_api.cinder: ('volume_type_list',),
         dash_api.neutron: ('network_list',),
+        dash_api.nova: ('availability_zone_list',),
         policy: ('check',),
     })
     def test_create_simple_instance_exception(self):
@@ -324,6 +336,9 @@ class DatabaseTests(test.TestCase):
         datastore_version = '5.5'
         field_name = self._build_flavor_widget_name(datastore,
                                                     datastore_version)
+        dash_api.nova.availability_zone_list(IsA(http.HttpRequest)) \
+            .AndReturn(self.availability_zones.list())
+
         # Actual create database call
         api.trove.instance_create(
             IsA(http.HttpRequest),
@@ -339,7 +354,10 @@ class DatabaseTests(test.TestCase):
             users=None,
             nics=nics,
             replica_count=None,
-            volume_type=None).AndRaise(trove_exception)
+            volume_type=None,
+            locality=None,
+            availability_zone=IsA(six.text_type)
+        ).AndRaise(trove_exception)
 
         self.mox.ReplayAll()
         post = {
@@ -358,29 +376,52 @@ class DatabaseTests(test.TestCase):
     @test.create_stubs({
         api.trove: ('instance_get', 'flavor_get', 'root_show')
     })
-    def _test_details(self, database, with_designate=False):
+    def _test_details(self, database, test_text, assert_contains=True):
         api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))\
             .AndReturn(database)
         api.trove.flavor_get(IsA(http.HttpRequest), IsA(str))\
             .AndReturn(self.flavors.first())
-        api.trove.root_show(IsA(http.HttpRequest), database.id) \
+        api.trove.root_show(IsA(http.HttpRequest), IsA(str)) \
             .AndReturn(self.database_user_roots.first())
 
         self.mox.ReplayAll()
-        res = self.client.get(DETAILS_URL)
-        self.assertTemplateUsed(res, 'horizon/common/_detail.html')
-        if with_designate:
-            self.assertContains(res, database.hostname)
-        else:
-            self.assertContains(res, database.ip[0])
+
+        # Suppress expected log messages in the test output
+        loggers = []
+        toSuppress = ["trove_dashboard.content.databases.tabs",
+                      "horizon.tables"]
+        for cls in toSuppress:
+            logger = logging.getLogger(cls)
+            loggers.append((logger, logger.getEffectiveLevel()))
+            logger.setLevel(logging.CRITICAL)
+        try:
+            res = self.client.get(DETAILS_URL)
+            self.assertTemplateUsed(res, 'project/databases/'
+                                         '_detail_overview.html')
+            if assert_contains:
+                self.assertContains(res, test_text)
+            else:
+                self.assertNotContains(res, test_text)
+        finally:
+            # Restore the previous log levels
+            for (log, level) in loggers:
+                log.setLevel(level)
 
     def test_details_with_ip(self):
         database = self.databases.first()
-        self._test_details(database, with_designate=False)
+        self._test_details(database, database.ip[0])
 
     def test_details_with_hostname(self):
         database = self.databases.list()[1]
-        self._test_details(database, with_designate=True)
+        self._test_details(database, database.hostname)
+
+    def test_details_without_locality(self):
+        database = self.databases.list()[1]
+        self._test_details(database, "Locality", assert_contains=False)
+
+    def test_details_with_locality(self):
+        database = self.databases.first()
+        self._test_details(database, "Locality")
 
     def test_create_database(self):
         database = self.databases.first()
@@ -989,6 +1030,7 @@ class DatabaseTests(test.TestCase):
                     'instance_create', 'instance_get', 'instance_list_all'),
         dash_api.cinder: ('volume_type_list',),
         dash_api.neutron: ('network_list',),
+        dash_api.nova: ('availability_zone_list',),
         policy: ('check',),
     })
     def test_create_replica_instance(self):
@@ -1024,6 +1066,9 @@ class DatabaseTests(test.TestCase):
 
         nics = [{"net-id": self.networks.first().id, "v4-fixed-ip": ''}]
 
+        dash_api.nova.availability_zone_list(IsA(http.HttpRequest)) \
+            .AndReturn(self.availability_zones.list())
+
         api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))\
             .AndReturn(self.databases.first())
 
@@ -1046,7 +1091,10 @@ class DatabaseTests(test.TestCase):
             users=None,
             nics=nics,
             replica_count=2,
-            volume_type=None).AndReturn(self.databases.first())
+            volume_type=None,
+            locality=None,
+            availability_zone=IsA(six.text_type)
+        ).AndReturn(self.databases.first())
 
         self.mox.ReplayAll()
         post = {
