@@ -43,6 +43,9 @@ def parse_datastore_and_version_text(datastore_and_version):
 
 
 class SetInstanceDetailsAction(workflows.Action):
+    availability_zone = forms.ChoiceField(
+        label=_("Availability Zone"),
+        required=False)
     name = forms.CharField(max_length=80, label=_("Instance Name"))
     volume = forms.IntegerField(label=_("Volume Size"),
                                 min_value=0,
@@ -59,6 +62,24 @@ class SetInstanceDetailsAction(workflows.Action):
             'class': 'switchable',
             'data-slug': 'datastore'
         }))
+
+    def __init__(self, request, *args, **kwargs):
+        super(SetInstanceDetailsAction, self).__init__(request,
+                                                       *args,
+                                                       **kwargs)
+        # Add this field to the end after the dynamic fields
+        self.fields['locality'] = forms.ChoiceField(
+            label=_("Locality"),
+            choices=[("", "None"),
+                     ("affinity", "affinity"),
+                     ("anti-affinity", "anti-affinity")],
+            required=False,
+            help_text=_("Specify whether future replicated instances will "
+                        "be created on the same hypervisor (affinity) or on "
+                        "different hypervisors (anti-affinity). "
+                        "This value is ignored if the instance to be "
+                        "launched is a replica.")
+        )
 
     class Meta(object):
         name = _("Details")
@@ -79,6 +100,9 @@ class SetInstanceDetailsAction(workflows.Action):
                 msg = _("You must select a flavor.")
                 self._errors[field_name] = self.error_class([msg])
 
+        if not self.data.get("locality", None):
+            self.cleaned_data["locality"] = None
+
         return self.cleaned_data
 
     def handle(self, request, context):
@@ -93,6 +117,33 @@ class SetInstanceDetailsAction(workflows.Action):
                 context["flavor"] = flavor
                 return context
         return None
+
+    @memoized.memoized_method
+    def availability_zones(self, request):
+        try:
+            return dash_api.nova.availability_zone_list(request)
+        except Exception:
+            LOG.exception("Exception while obtaining availablity zones")
+            self._availability_zones = []
+
+    def populate_availability_zone_choices(self, request, context):
+        try:
+            zones = self.availability_zones(request)
+        except Exception:
+            zones = []
+            redirect = reverse('horizon:project:databases:index')
+            exceptions.handle(request,
+                              _('Unable to retrieve availability zones.'),
+                              redirect=redirect)
+
+        zone_list = [(zone.zoneName, zone.zoneName)
+                     for zone in zones if zone.zoneState['available']]
+        zone_list.sort()
+        if not zone_list:
+            zone_list.insert(0, ("", _("No availability zones found")))
+        elif len(zone_list) > 1:
+            zone_list.insert(0, ("", _("Any Availability Zone")))
+        return zone_list
 
     @memoized.memoized_method
     def datastore_flavors(self, request, datastore_name, datastore_version):
@@ -203,7 +254,8 @@ TROVE_ADD_PERMS = TROVE_ADD_USER_PERMS + TROVE_ADD_DATABASE_PERMS
 
 class SetInstanceDetails(workflows.Step):
     action_class = SetInstanceDetailsAction
-    contributes = ("name", "volume", "volume_type", "flavor", "datastore")
+    contributes = ("name", "volume", "volume_type", "flavor", "datastore",
+                   "locality", "availability_zone")
 
 
 class AddDatabasesAction(workflows.Action):
@@ -479,24 +531,36 @@ class LaunchInstance(workflows.Workflow):
             volume_type = context['volume_type']
         return volume_type
 
+    def _get_locality(self, context):
+        # If creating a replica from a master then always set to None
+        if context.get('master'):
+            return None
+
+        locality = None
+        if context.get('locality'):
+            locality = context['locality']
+        return locality
+
     def handle(self, request, context):
         try:
             datastore, datastore_version = parse_datastore_and_version_text(
                 binascii.unhexlify(self.context['datastore']))
+            avail_zone = context.get('availability_zone', None)
             LOG.info("Launching database instance with parameters "
                      "{name=%s, volume=%s, volume_type=%s, flavor=%s, "
                      "datastore=%s, datastore_version=%s, "
                      "dbs=%s, users=%s, "
-                     "backups=%s, nics=%s, "
-                     "replica_of=%s, replica_count=%s, "
-                     "configuration=%s}",
+                     "backups=%s, nics=%s, replica_of=%s replica_count=%s, "
+                     "configuration=%s, locality=%s, "
+                     "availability_zone=%s}",
                      context['name'], context['volume'],
                      self._get_volume_type(context), context['flavor'],
                      datastore, datastore_version,
                      self._get_databases(context), self._get_users(context),
                      self._get_backup(context), self._get_nics(context),
                      context.get('master'), context['replica_count'],
-                     context.get('config'))
+                     context.get('config'), self._get_locality(context),
+                     avail_zone)
             api.trove.instance_create(request,
                                       context['name'],
                                       context['volume'],
@@ -511,7 +575,9 @@ class LaunchInstance(workflows.Workflow):
                                       replica_count=context['replica_count'],
                                       volume_type=self._get_volume_type(
                                           context),
-                                      configuration=context.get('config'))
+                                      configuration=context.get('config'),
+                                      locality=self._get_locality(context),
+                                      availability_zone=avail_zone)
             return True
         except Exception:
             exceptions.handle(request)

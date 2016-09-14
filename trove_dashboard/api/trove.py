@@ -57,7 +57,7 @@ def cluster_delete(request, cluster_id):
 
 def cluster_create(request, name, volume, flavor, num_instances,
                    datastore, datastore_version,
-                   nics=None, root_password=None):
+                   nics=None, root_password=None, locality=None):
     instances = []
     for i in range(num_instances):
         instance = {}
@@ -73,7 +73,8 @@ def cluster_create(request, name, volume, flavor, num_instances,
         name,
         datastore,
         datastore_version,
-        instances=instances)
+        instances=instances,
+        locality=locality)
 
 
 def cluster_grow(request, cluster_id, new_instances):
@@ -89,6 +90,8 @@ def cluster_grow(request, cluster_id, new_instances):
             instance["type"] = new_instance.type
         if new_instance.related_to:
             instance["related_to"] = new_instance.related_to
+        if new_instance.nics:
+            instance["nics"] = [{'net-id': new_instance.nics}]
         instances.append(instance)
     return troveclient(request).clusters.grow(cluster_id, instances)
 
@@ -135,7 +138,8 @@ def instance_create(request, name, volume, flavor, databases=None,
                     users=None, restore_point=None, nics=None,
                     datastore=None, datastore_version=None,
                     replica_of=None, replica_count=None,
-                    volume_type=None, configuration=None):
+                    volume_type=None, configuration=None, locality=None,
+                    availability_zone=None):
     # TODO(dklyle): adding conditional to support trove without volume
     # support for now until API supports checking for volume support
     if volume > 0:
@@ -156,7 +160,9 @@ def instance_create(request, name, volume, flavor, databases=None,
         datastore_version=datastore_version,
         replica_of=replica_of,
         replica_count=replica_count,
-        configuration=configuration)
+        configuration=configuration,
+        locality=locality,
+        availability_zone=availability_zone)
 
 
 def instance_resize_volume(request, instance_id, size):
