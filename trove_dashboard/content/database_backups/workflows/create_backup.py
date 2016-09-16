@@ -30,48 +30,88 @@ LOG = logging.getLogger(__name__)
 
 class BackupDetailsAction(workflows.Action):
     name = forms.CharField(max_length=80, label=_("Name"))
-    instance = forms.ChoiceField(label=_("Database Instance"))
+    instance = forms.ChoiceField(label=_("Database Instance"),
+                                 widget=forms.Select(attrs={
+                                     'class': 'switchable',
+                                     'data-slug': 'instance'
+                                 }))
     description = forms.CharField(max_length=512, label=_("Description"),
                                   widget=forms.TextInput(),
                                   required=False,
                                   help_text=_("Optional Backup Description"))
-    parent = forms.ChoiceField(label=_("Parent Backup"),
-                               required=False,
-                               help_text=_("Optional parent backup"))
 
     class Meta(object):
         name = _("Details")
         help_text_template = \
             "project/database_backups/_backup_details_help.html"
 
+    def handle(self, request, context):
+        instance = context["instance"]
+        if instance:
+            instance_name, instance_id = database_utils.parse_instance_text(
+                instance)
+            if instance_id:
+                context["instance"] = instance_id
+
+                field_name = database_utils.build_parent_backup_field_name(
+                    instance_name, instance_id)
+                # field_name = 'parent-' + instance
+                if field_name in self.data:
+                    parent = self.data[field_name]
+                    if parent:
+                        context["parent"] = parent
+
+                return context
+        return None
+
     def populate_instance_choices(self, request, context):
         LOG.info("Obtaining list of instances.")
         try:
             instances = api.trove.instance_list(request)
+            for instance in instances:
+                self._add_parent_backup_field(request, instance)
         except Exception:
             instances = []
             msg = _("Unable to list database instances to backup.")
             exceptions.handle(request, msg)
-        return [(i.id, i.name) for i in instances
+        return [(database_utils.build_instance_widget_field_name(i.name, i.id),
+                 i.name) for i in instances
                 if (i.status in database_utils.ACTIVE_STATES) and
                    (db_capability.can_backup(i.datastore['type']))]
 
-    def populate_parent_choices(self, request, context):
+    def _add_parent_backup_field(self, request, instance):
+        name = database_utils.build_instance_widget_field_name(instance.name,
+                                                               instance.id)
+        attr_key = 'data-instance-' + name
+        field_name = database_utils.build_parent_backup_field_name(
+            instance.name, instance.id)
+
+        self.fields[field_name] = forms.ChoiceField(
+            label=_("Parent Backup"),
+            required=False,
+            help_text=_("Optional parent backup"),
+            widget=forms.Select(attrs={
+                'class': 'switched',
+                'data-switch-on': 'instance',
+                attr_key: _("Parent Backup")
+            }))
+
         try:
-            backups = api.trove.backup_list(request)
-            choices = [(b.id, b.name) for b in backups
+            valid_backups = api.trove.instance_backups(request, instance)
+            choices = [(b.id, b.name) for b in valid_backups
                        if (b.status == 'COMPLETED') and
-                          (db_capability.can_backup(b.datastore['type']))]
+                       (db_capability.can_backup(b.datastore['type']))]
         except Exception:
             choices = []
-            msg = _("Unable to list database backups for parent.")
+            msg = _("Unable to list database backups for instance.")
             exceptions.handle(request, msg)
 
         if choices:
             choices.insert(0, ("", _("Select parent backup")))
         else:
             choices.insert(0, ("", _("No backups available")))
-        return choices
+
+        self.fields[field_name].choices = choices
 
 
 class SetBackupDetails(workflows.Step):

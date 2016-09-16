@@ -625,6 +625,7 @@ def data(TEST):
     TEST.trove_clusters.add(cluster2)
     TEST.databases = utils.TestDataContainer()
     TEST.database_backups = utils.TestDataContainer()
+    TEST.database_instance_backups = utils.TestDataContainer()
     TEST.database_configurations = utils.TestDataContainer()
     TEST.database_users = utils.TestDataContainer()
     TEST.database_user_dbs = utils.TestDataContainer()
@@ -638,6 +639,7 @@ def data(TEST):
     TEST.database_backups.add(bkup1)
     TEST.database_backups.add(bkup2)
     TEST.database_backups.add(bkup3)
+    TEST.database_instance_backups.add(bkup1)
 
     TEST.database_backup_schedules = utils.TestDataContainer()
     TEST.database_backup_schedules.add(bkup_sched_1, bkup_sched_2)
