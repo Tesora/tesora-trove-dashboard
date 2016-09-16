@@ -1443,4 +1443,46 @@ class DatabaseTests(test.TestCase):
 
         advanced_page = create_instance.AdvancedAction(request, None)
         choices = advanced_page.populate_master_choices(request, None)
-        self.assertTrue(len(choices) == len(self.databases.list()) + 1)
+        self.assertTrue(len(choices) == len(self.databases.list()))
+
+    @test.create_stubs({
+        api.trove: ('flavor_list', 'instance_list')
+    })
+    def test_force_delete_reset_build_status(self):
+        instance_list = []
+        for database in self.databases.list():
+            if database.status == "BUILD":
+                instance_list.append(database)
+                break
+        databases = common.Paginated(instance_list)
+        (api.trove.instance_list(IsA(http.HttpRequest), marker=None)
+            .AndReturn(databases))
+        (api.trove.flavor_list(IsA(http.HttpRequest))
+            .AndReturn(self.flavors.list()))
+        self.mox.ReplayAll()
+
+        res = self.client.get(INDEX_URL)
+        self.assertContains(res, 'Force Delete')
+        self.assertContains(res, 'Reset Status')
+
+    @test.create_stubs({
+        api.trove: ('datastore_version_list', 'flavor_list', 'instance_list')
+    })
+    def test_force_delete_reset_active_status(self):
+        instance_list = []
+        for database in self.databases.list():
+            if database.status != "BUILD":
+                instance_list.append(database)
+                break
+        databases = common.Paginated(instance_list)
+        (api.trove.instance_list(IsA(http.HttpRequest), marker=None)
+            .AndReturn(databases))
+        (api.trove.flavor_list(IsA(http.HttpRequest))
+            .AndReturn(self.flavors.list()))
+        (api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str))
+            .MultipleTimes().AndReturn(self.datastore_versions.list()))
+        self.mox.ReplayAll()
+
+        res = self.client.get(INDEX_URL)
+        self.assertNotContains(res, 'Force Delete')
+        self.assertNotContains(res, 'Reset Status')

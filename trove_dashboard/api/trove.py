@@ -75,6 +75,15 @@ def cluster_delete(request, cluster_id):
     return troveclient(request).clusters.delete(cluster_id)
 
 
+def cluster_force_delete(request, cluster_id):
+    cluster_reset_status(request, cluster_id)
+    return cluster_delete(request, cluster_id)
+
+
+def cluster_reset_status(request, cluster_id):
+    return troveclient(request).clusters.reset_status(cluster_id)
+
+
 def cluster_create(request, name, volume, flavor, num_instances,
                    datastore, datastore_version,
                    nics=None, root_password=None, locality=None,
@@ -186,6 +195,15 @@ def instance_get(request, instance_id):
 
 def instance_delete(request, instance_id):
     return troveclient(request).instances.delete(instance_id)
+
+
+def instance_force_delete(request, instance_id):
+    instance_reset_status(request, instance_id)
+    return instance_delete(request, instance_id)
+
+
+def instance_reset_status(request, instance_id):
+    return troveclient(request).instances.reset_status(instance_id)
 
 
 def instance_create(request, name, volume, flavor, databases=None,

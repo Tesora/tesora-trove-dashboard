@@ -62,6 +62,44 @@ class DeleteCluster(tables.BatchAction):
         api.trove.cluster_delete(request, obj_id)
 
 
+class ForceDelete(tables.Action):
+    name = "force_delete_action"
+    verbose_name = _("Force Delete")
+    classes = ('btn-danger',)
+
+    def allowed(self, request, cluster):
+        return (cluster.task["name"] == 'BUILDING' or
+                cluster.task["name"] == 'ERROR')
+
+    def single(self, table, request, object_id):
+        try:
+            api.trove.cluster_force_delete(request, object_id)
+            messages.success(request,
+                             _("Successfully forced delete of cluster."))
+        except Exception as e:
+            messages.warning(request,
+                             _("Cannot force delete: %s") % e.message)
+
+
+class ResetStatus(tables.Action):
+    name = "reset_status_action"
+    verbose_name = _("Reset Status")
+    classes = ('btn-danger',)
+
+    def allowed(self, request, cluster):
+        return (cluster.task["name"] == 'BUILDING' or
+                cluster.task["name"] == 'ERROR')
+
+    def single(self, table, request, object_id):
+        try:
+            api.trove.cluster_reset_status(request, object_id)
+            messages.success(request,
+                             _("Successfully reset status of cluster."))
+        except Exception as e:
+            messages.warning(request,
+                             _("Cannot reset status: %s") % e.message)
+
+
 class LaunchLink(tables.LinkAction):
     name = "launch"
     verbose_name = _("Launch Cluster")
@@ -180,7 +218,7 @@ class ClustersTable(tables.DataTable):
         row_class = UpdateRow
         table_actions = (LaunchLink, DeleteCluster)
         row_actions = (ClusterGrow, ClusterShrink, ResetPassword,
-                       DeleteCluster)
+                       DeleteCluster, ResetStatus, ForceDelete)
 
 
 def get_instance_size(instance):

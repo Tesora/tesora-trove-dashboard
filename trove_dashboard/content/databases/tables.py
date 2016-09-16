@@ -93,6 +93,42 @@ class RestartInstance(tables.BatchAction):
         api.trove.instance_restart(request, obj_id)
 
 
+class ForceDeleteAction(tables.Action):
+    name = "force_delete_action"
+    verbose_name = _("Force Delete")
+    classes = ('btn-danger',)
+
+    def allowed(self, request, instance):
+        return (instance.status == 'BUILD' or instance.status == 'ERROR')
+
+    def single(self, table, request, object_id):
+        try:
+            api.trove.instance_force_delete(request, object_id)
+            messages.success(request,
+                             _("Successfully forced delete of instance."))
+        except Exception as e:
+            messages.warning(request,
+                             _("Cannot force delete: %s") % e.message)
+
+
+class ResetStatusAction(tables.Action):
+    name = "reset_status_action"
+    verbose_name = _("Reset Status")
+    classes = ('btn-danger',)
+
+    def allowed(self, request, instance):
+        return (instance.status == 'BUILD' or instance.status == 'ERROR')
+
+    def single(self, table, request, object_id):
+        try:
+            api.trove.instance_reset_status(request, object_id)
+            messages.success(request,
+                             _("Successfully reset status of instance."))
+        except Exception as e:
+            messages.warning(request,
+                             _("Cannot reset status: %s") % e.message)
+
+
 class DetachReplica(tables.BatchAction):
     @staticmethod
     def action_present(count):
@@ -647,7 +683,9 @@ class InstancesTable(tables.DataTable):
                        upgrade_tables.UpgradeInstanceAction,
                        schedules_tables.ViewSchedules,
                        RestartInstance,
-                       DeleteInstance)
+                       DeleteInstance,
+                       ResetStatusAction,
+                       ForceDeleteAction)
 
 
 class UsersTable(tables.DataTable):
