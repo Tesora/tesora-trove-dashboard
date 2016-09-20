@@ -79,8 +79,7 @@ class DatabasesBackupsTests(test.TestCase):
         backupName = "NewBackup"
         backupDesc = "Backup Description"
 
-        instance_widget = utils.build_instance_widget_field_name(
-            database.name, database.id)
+        instance_widget = utils.build_instance_widget_field_name(database.id)
 
         api.trove.instance_backups(IsA(http.HttpRequest), database) \
             .AndReturn(self.database_backups.list())
@@ -131,10 +130,8 @@ class DatabasesBackupsTests(test.TestCase):
         backupDesc = "Backup Description"
         backupParent = self.database_backups.first()
 
-        instance_widget = utils.build_instance_widget_field_name(
-            database.name, database.id)
-        field_name = utils.build_parent_backup_field_name(database.name,
-                                                          database.id)
+        instance_widget = utils.build_instance_widget_field_name(database.id)
+        field_name = utils.build_parent_backup_field_name(database.id)
 
         api.trove.instance_backups(IsA(http.HttpRequest), database) \
             .AndReturn(self.database_instance_backups.list())
@@ -173,15 +170,14 @@ class DatabasesBackupsTests(test.TestCase):
         api.trove.instance_backups(IsA(http.HttpRequest),
                                    self.databases.list()[1])\
             .AndReturn(self.database_backups.list()[1:])
-        for i in range(2, len(self.databases.list())):
+        for i in range(2, (len(self.databases.list()) - 1)):
             api.trove.instance_backups(IsA(http.HttpRequest),
                                        self.databases.list()[i]) \
                 .AndReturn([])
 
         self.mox.ReplayAll()
 
-        field_name = utils.build_parent_backup_field_name(database.name,
-                                                          database.id)
+        field_name = utils.build_parent_backup_field_name(database.id)
 
         backup_details = create_backup.BackupDetailsAction(request, None)
         self.assertTrue(len(backup_details.fields[field_name].choices) ==

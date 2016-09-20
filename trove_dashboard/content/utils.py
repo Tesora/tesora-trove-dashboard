@@ -149,23 +149,16 @@ def build_config_field_name(datastore, datastore_version):
                                    datastore_version)
 
 
-def build_parent_backup_field_name(instance_name, instance_id):
-    return 'parent-' + build_instance_widget_field_name(instance_name,
-                                                        instance_id)
+def build_parent_backup_field_name(instance_id):
+    return 'parent-' + build_instance_widget_field_name(instance_id)
 
 
-def build_instance_display_text(instance_name, instance_id):
-    return instance_name + ' - ' + instance_id
-
-
-def build_instance_widget_field_name(instance_name, instance_id):
-    return binascii.hexlify(instance_name + ' - ' + instance_id)
+def build_instance_widget_field_name(instance_id):
+    return binascii.hexlify(instance_id)
 
 
 def parse_instance_text(encoded_instance):
     if encoded_instance:
-        instance = binascii.unhexlify(
-            encoded_instance)
-        instance_name, instance_id = instance.split('-', 1)
-        return instance_name.strip(), instance_id.strip()
-    return None, None
+        instance = binascii.unhexlify(encoded_instance)
+        return instance.strip()
+    return None
