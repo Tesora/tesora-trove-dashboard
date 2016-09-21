@@ -28,6 +28,7 @@ from openstack_dashboard.dashboards.project.instances \
 from openstack_dashboard.dashboards.project.instances.workflows \
     import create_instance as dash_create_instance
 
+import re
 
 from trove_dashboard import api
 from trove_dashboard.content.databases import db_capability
@@ -315,6 +316,9 @@ class SetInstanceDetailsAction(workflows.Action):
             request, datastore, datastore_version)
 
 
+TROVE_ENABLE_ORACLE_DATABASE_NAME_VALIDATION = getattr(settings,
+                                                       'FORCE_ORACLE_DATABASE',
+                                                       False)
 TROVE_ADD_USER_PERMS = getattr(settings, 'TROVE_ADD_USER_PERMS', [])
 TROVE_ADD_DATABASE_PERMS = getattr(settings, 'TROVE_ADD_DATABASE_PERMS', [])
 TROVE_ADD_PERMS = TROVE_ADD_USER_PERMS + TROVE_ADD_DATABASE_PERMS
@@ -355,13 +359,28 @@ class AddDatabasesAction(workflows.Action):
 
     def clean(self):
         cleaned_data = super(AddDatabasesAction, self).clean()
+        datastore, datastore_version = (
+            utils.parse_datastore_and_version_text(
+                self.data[u'datastore']))
+
+        if (TROVE_ENABLE_ORACLE_DATABASE_NAME_VALIDATION and
+                db_capability.is_oracle_compatible_datastore(datastore)):
+            databases = cleaned_data.get('databases')
+            if not databases:
+                msg = _('You must specify a database name.')
+                self._errors["databases"] = self.error_class([msg])
+            elif len(databases) > 8:
+                msg = _("Database name cannot exceed 8 characters.")
+                self._errors["databases"] = self.error_class([msg])
+            elif not re.match(r'[a-zA-Z0-9]\w+$', databases):
+                msg = _("Database name contains invalid characters.")
+                self._errors["databases"] = self.error_class([msg])
+
         if cleaned_data.get('user'):
             if not cleaned_data.get('password'):
                 msg = _('You must specify a password if you create a user.')
                 self._errors["password"] = self.error_class([msg])
-            datastore, datastore_version = (
-                utils.parse_datastore_and_version_text(
-                    self.data[u'datastore']))
+
             if db_capability.db_required_when_creating_user(datastore):
                 if not cleaned_data.get('databases'):
                     msg = _('You must specify at least one database if '

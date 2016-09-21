@@ -61,6 +61,10 @@ volume sizes provided in the new instance and new cluster dialogs:
 * ``TROVE_DEFAULT_CLUSTER_VOL_SIZE``
 * ``TROVE_DEFAULT_VOL_SIZE``
 
+The following setting will ask the user to enter a database name when creating
+an instance with an Oracle datastore
+
+* ``TROVE_ENABLE_ORACLE_DATABASE_NAME_VALIDATION = True``
 
 NOTE:
 =====
