@@ -32,6 +32,8 @@ from horizon.utils import memoized
 
 from trove_dashboard import api
 from trove_dashboard.content.database_clusters import cluster_manager
+from trove_dashboard.content.database_clusters.upgrade \
+    import tables as upgrade_tables
 from trove_dashboard.content.databases import db_capability
 from trove_dashboard.content import utils as database_utils
 
@@ -219,7 +221,8 @@ class ClustersTable(tables.DataTable):
         status_columns = ["task"]
         row_class = UpdateRow
         table_actions = (LaunchLink, DeleteCluster)
-        row_actions = (ClusterGrow, ClusterShrink, ResetPassword,
+        row_actions = (ClusterGrow, ClusterShrink,
+                       upgrade_tables.UpgradeCluster, ResetPassword,
                        DeleteCluster, ResetStatus, ForceDelete)
 
 

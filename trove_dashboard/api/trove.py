@@ -141,6 +141,11 @@ def cluster_shrink(request, cluster_id, instances):
     return troveclient(request).clusters.shrink(cluster_id, instances)
 
 
+def cluster_upgrade(request, cluster_id, datastore_version):
+    return troveclient(request).clusters.upgrade(cluster_id,
+                                                 datastore_version)
+
+
 def create_cluster_root(request, cluster_id, password):
     # It appears the code below depends on this trove change
     # https://review.openstack.org/#/c/166954/.  Comment out when that

@@ -14,12 +14,16 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from django.conf.urls import include  # noqa
 from django.conf.urls import patterns  # noqa
 from django.conf.urls import url  # noqa
 
+from trove_dashboard.content.database_clusters.upgrade \
+    import urls as upgrade_urls
 from trove_dashboard.content.database_clusters import views
 
-CLUSTERS = r'^(?P<cluster_id>[^/]+)/%s$'
+BASECLUSTERS = r'^(?P<cluster_id>[^/]+)/%s'
+CLUSTERS = BASECLUSTERS + '$'
 
 urlpatterns = patterns(
     '',
@@ -42,4 +46,6 @@ urlpatterns = patterns(
     url(CLUSTERS % 'backup_instance',
         views.BackupInstanceView.as_view(),
         name='backup_instance'),
+    url(BASECLUSTERS % 'upgrade/',
+        include(upgrade_urls, namespace='upgrade')),
 )
