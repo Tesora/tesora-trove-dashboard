@@ -66,6 +66,12 @@ an instance with an Oracle datastore
 
 * ``TROVE_ENABLE_ORACLE_DATABASE_NAME_VALIDATION = True``
 
+The following setting provides a way to enable backup of a single instance of
+a cluster.  Set the value as a list of datastores names.
+For example, TROVE_CLUSTER_DATASTORES_ALLOWING_BACKUP = ["mongodb", "pxc"]
+
+* ``TROVE_CLUSTER_DATASTORES_ALLOWING_BACKUP``
+
 NOTE:
 =====
 

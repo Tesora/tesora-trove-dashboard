@@ -149,16 +149,18 @@ def create_cluster_root(request, cluster_id, password):
     troveclient(request).root.create_cluster_root(cluster_id, password)
 
 
-def instance_list(request, marker=None):
+def instance_list(request, marker=None, include_clustered=False):
     page_size = utils.get_page_size(request)
-    return troveclient(request).instances.list(limit=page_size, marker=marker)
+    return troveclient(request).instances.list(
+        limit=page_size, marker=marker, include_clustered=include_clustered)
 
 
-def instance_list_all(request):
-    instances = instance_list(request)
+def instance_list_all(request, include_clustered=False):
+    instances = instance_list(request, include_clustered=include_clustered)
     marker = instances.next
     while marker:
-        temp_instances = instance_list(request, marker=marker)
+        temp_instances = instance_list(request, marker=marker,
+                                       include_clustered=include_clustered)
         marker = temp_instances.next
         instances.items += temp_instances.items
         instances.links = temp_instances.links

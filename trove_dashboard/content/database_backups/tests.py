@@ -69,11 +69,12 @@ class DatabasesBackupsTests(test.TestCase):
         self.assertMessageCount(res, error=1)
 
     @test.create_stubs({
-        api.trove: ('instance_list', 'backup_create', 'instance_backups'),
+        api.trove: ('instance_list_all', 'backup_create', 'instance_backups'),
     })
     def test_launch_backup(self):
-        api.trove.instance_list(IsA(http.HttpRequest))\
-            .AndReturn(self.databases.list())
+        (api.trove.instance_list_all(IsA(http.HttpRequest),
+                                     include_clustered=False)
+            .AndReturn(self.databases.list()))
 
         database = self.databases.first()
         backupName = "NewBackup"
@@ -105,11 +106,12 @@ class DatabasesBackupsTests(test.TestCase):
         self.assertRedirectsNoFollow(res, INDEX_URL)
 
     @test.create_stubs({
-        api.trove: ('instance_list',),
+        api.trove: ('instance_list_all',),
     })
     def test_launch_backup_exception(self):
-        api.trove.instance_list(IsA(http.HttpRequest))\
-            .AndRaise(self.exceptions.trove)
+        (api.trove.instance_list_all(IsA(http.HttpRequest),
+                                     include_clustered=False)
+            .AndRaise(self.exceptions.trove))
 
         self.mox.ReplayAll()
 
@@ -119,11 +121,12 @@ class DatabasesBackupsTests(test.TestCase):
                                 'project/database_backups/backup.html')
 
     @test.create_stubs({
-        api.trove: ('instance_list', 'backup_create', 'instance_backups'),
+        api.trove: ('instance_list_all', 'backup_create', 'instance_backups'),
     })
     def test_launch_backup_incr(self):
-        api.trove.instance_list(IsA(http.HttpRequest)) \
-            .AndReturn(self.databases.list())
+        (api.trove.instance_list_all(IsA(http.HttpRequest),
+                                     include_clustered=False)
+            .AndReturn(self.databases.list()))
 
         database = self.databases.first()
         backupName = "NewBackup"
@@ -157,14 +160,15 @@ class DatabasesBackupsTests(test.TestCase):
         self.assertRedirectsNoFollow(res, INDEX_URL)
 
     @test.create_stubs({
-        api.trove: ('instance_list', 'instance_backups',)
+        api.trove: ('instance_list_all', 'instance_backups',)
     })
     def test_parent_backup_list(self):
         database = self.databases.first()
         request = http.HttpRequest()
 
-        api.trove.instance_list(IsA(http.HttpRequest))\
-            .AndReturn(self.databases.list())
+        (api.trove.instance_list_all(IsA(http.HttpRequest),
+                                     include_clustered=False)
+            .AndReturn(self.databases.list()))
         api.trove.instance_backups(IsA(http.HttpRequest), database)\
             .AndReturn(self.database_instance_backups.list())
         api.trove.instance_backups(IsA(http.HttpRequest),

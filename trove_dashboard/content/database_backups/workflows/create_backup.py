@@ -12,6 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import ast
 import logging
 
 from django.utils.translation import ugettext_lazy as _
@@ -51,6 +52,12 @@ class BackupDetailsAction(workflows.Action):
         else:
             self.current_instance_id = None
 
+        if hasattr(request, "GET"):
+            self.include_clustered = ast.literal_eval(
+                request.GET.get('include_clustered', 'False'))
+        else:
+            self.include_clustered = False
+
         super(BackupDetailsAction, self).__init__(request, *args, **kwargs)
 
     def handle(self, request, context):
@@ -75,7 +82,8 @@ class BackupDetailsAction(workflows.Action):
         LOG.info("Obtaining list of instances.")
         try:
             choices = []
-            instances = api.trove.instance_list(request)
+            instances = api.trove.instance_list_all(
+                request, include_clustered=self.include_clustered)
             for instance in instances:
                 if (self.current_instance_id and
                         self.current_instance_id != instance.id):
@@ -137,7 +145,7 @@ class CreateBackup(workflows.Workflow):
     name = _("Backup Database")
     finalize_button_name = _("Backup")
     success_message = _('Scheduled backup "%(name)s".')
-    failure_message = _('Unable to launch %(count)s named "%(name)s".')
+    failure_message = _('Unable to create backup for "%(name)s".')
     success_url = "horizon:project:database_backups:index"
     default_steps = [SetBackupDetails]
 
@@ -161,8 +169,8 @@ class CreateBackup(workflows.Workflow):
                                     context['description'],
                                     context['parent'])
             return True
-        except Exception:
+        except Exception as e:
             LOG.exception("Exception while creating backup")
-            msg = _('Error creating database backup.')
+            msg = _('Cannot create database backup: %s') % e.message
             exceptions.handle(request, msg)
             return False

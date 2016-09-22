@@ -16,6 +16,7 @@
 
 import logging
 
+from django.conf import settings
 from django.core import urlresolvers
 from django import shortcuts
 from django.template.defaultfilters import title  # noqa
@@ -32,6 +33,7 @@ from horizon.utils import memoized
 from trove_dashboard import api
 from trove_dashboard.content.database_clusters import cluster_manager
 from trove_dashboard.content.databases import db_capability
+from trove_dashboard.content import utils as database_utils
 
 LOG = logging.getLogger(__name__)
 
@@ -244,6 +246,30 @@ def get_host(instance):
     return _("Not Assigned")
 
 
+TROVE_CLUSTER_DATASTORES_ALLOWING_BACKUP = getattr(
+    settings, 'TROVE_CLUSTER_DATASTORES_ALLOWING_BACKUP', [])
+
+
+class CreateBackup(tables.LinkAction):
+    name = "backup"
+    verbose_name = _("Create Backup")
+    url = "horizon:project:database_backups:create"
+    classes = ("ajax-modal",)
+    icon = "camera"
+
+    def allowed(self, request, instance=None):
+        datastore = instance.datastore.get("type", None)
+        if datastore not in TROVE_CLUSTER_DATASTORES_ALLOWING_BACKUP:
+            return False
+
+        return (instance.status in database_utils.ACTIVE_STATES and
+                request.user.has_perm('openstack.services.object-store'))
+
+    def get_link_url(self, datum):
+        url = urlresolvers.reverse(self.url)
+        return url + "?instance=%s" % datum.id + "&include_clustered=True"
+
+
 class InstancesTable(tables.DataTable):
     name = tables.Column("name",
                          verbose_name=_("Name"))
@@ -261,6 +287,7 @@ class InstancesTable(tables.DataTable):
     class Meta(object):
         name = "instances"
         verbose_name = _("Instances")
+        row_actions = (CreateBackup,)
 
 
 class ClusterShrinkAction(tables.BatchAction):

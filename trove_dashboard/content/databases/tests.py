@@ -1433,10 +1433,13 @@ class DatabaseTests(test.TestCase):
                                       next_marker='marker')
         second_part = common.Paginated(self.databases.list()[1:])
 
-        api.trove.instance_list(request).AndReturn(first_part)
-        (api.trove.instance_list(request, marker='marker')
-         .AndReturn(second_part))
-        api.trove.instance_list(request).AndReturn(first_part)
+        (api.trove.instance_list(request, include_clustered=False)
+            .AndReturn(first_part))
+        (api.trove.instance_list(request, marker='marker',
+                                 include_clustered=False)
+            .AndReturn(second_part))
+        (api.trove.instance_list(request, include_clustered=False)
+            .AndReturn(first_part))
         api.trove.region_list(request).AndReturn([])
 
         self.mox.ReplayAll()

@@ -452,7 +452,7 @@ class CreateBackup(tables.LinkAction):
 
     def get_link_url(self, datam):
         url = urlresolvers.reverse(self.url)
-        return url + "?instance=%s" % datam.id
+        return url + "?instance=%s" % datam.id + "&include_clustered=False"
 
 
 class ResizeVolume(tables.LinkAction):

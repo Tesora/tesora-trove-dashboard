@@ -39,4 +39,7 @@ urlpatterns = patterns(
     url(CLUSTERS % 'reset_password',
         views.ResetPasswordView.as_view(),
         name='reset_password'),
+    url(CLUSTERS % 'backup_instance',
+        views.BackupInstanceView.as_view(),
+        name='backup_instance'),
 )
