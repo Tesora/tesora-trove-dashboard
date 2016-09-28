@@ -642,6 +642,16 @@ def get_databases(user):
     return _("-")
 
 
+def get_roles(user):
+    raw_roles = [role for role in getattr(user, "roles", [])]
+    if not raw_roles:
+        return _("-")
+    else:
+        roles = [role['name'] for role in raw_roles]
+        roles.sort()
+        return ', '.join(roles)
+
+
 class InstancesTable(tables.DataTable):
     name = tables.Column("name",
                          link="horizon:project:databases:detail",
@@ -692,6 +702,7 @@ class UsersTable(tables.DataTable):
     name = tables.Column("name", verbose_name=_("User Name"))
     host = tables.Column("host", verbose_name=_("Allowed Host"))
     databases = tables.Column(get_databases, verbose_name=_("Databases"))
+    roles = tables.Column(get_roles, verbose_name=_("Roles"))
 
     class Meta(object):
         name = "users"

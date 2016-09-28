@@ -72,6 +72,12 @@ For example, TROVE_CLUSTER_DATASTORES_ALLOWING_BACKUP = ["mongodb", "pxc"]
 
 * ``TROVE_CLUSTER_DATASTORES_ALLOWING_BACKUP``
 
+The following setting provides a way to enable specifying user roles for a
+datastore.  Set the value as a list of datastores names.
+For example, TROVE_ENABLE_USER_ROLES = ["couchbase"]
+
+* ``TROVE_ENABLE_USER_ROLES``
+
 NOTE:
 =====
 

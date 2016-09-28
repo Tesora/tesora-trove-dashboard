@@ -748,15 +748,24 @@ class DatabaseTests(test.TestCase):
         res = self.client.post(url, form_data)
         self.assertRedirectsNoFollow(res, url)
 
+    @test.create_stubs({
+        api.trove: ('instance_get',)
+    })
     def test_create_user(self):
+        database = self.databases.first()
         user = self.users.first()
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))
+            .AndReturn(database))
+        self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_user',
                       args=[user.id])
         res = self.client.get(url)
         self.assertTemplateUsed(res, 'project/databases/create_user.html')
 
-    @test.create_stubs({api.trove: ('user_create',)})
+    @test.create_stubs({
+        api.trove: ('instance_get', 'user_create',)
+    })
     def test_create_new_user(self):
         database = self.databases.first()
         user = self.users.first()
@@ -765,11 +774,15 @@ class DatabaseTests(test.TestCase):
             "name": "Test_User2",
             "host": "%",
             "databases": ["TestDB"],
+            "roles": []
         }
 
-        api.trove.user_create(
-            IsA(http.HttpRequest), database.id, user.name, u'password',
-            host=u'', databases=[]).AndReturn(new_user)
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))
+            .AndReturn(database))
+        (api.trove.user_create(IsA(http.HttpRequest), IsA(six.text_type),
+                               IsA(six.text_type), IsA(six.text_type),
+                               host=u'', databases=[], roles=None)
+            .AndReturn(new_user))
 
         self.mox.ReplayAll()
 
@@ -785,11 +798,17 @@ class DatabaseTests(test.TestCase):
         self.assertNoFormErrors(res)
         self.assertMessageCount(success=1)
 
-    @test.create_stubs({api.trove: ('user_create',)})
+    @test.create_stubs({
+        api.trove: ('instance_get', 'user_create',)
+    })
     def test_create_new_user_exception(self):
-        api.trove.user_create(
-            IsA(http.HttpRequest), u'id', u'name', u'password',
-            host=u'', databases=[]).AndRaise(self.exceptions.trove)
+        database = self.databases.first()
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))
+            .AndReturn(database))
+        (api.trove.user_create(IsA(http.HttpRequest), IsA(six.text_type),
+                               IsA(six.text_type), IsA(six.text_type),
+                               host=u'', databases=[], roles=None)
+            .AndRaise(self.exceptions.trove))
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_user',

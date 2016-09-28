@@ -383,10 +383,12 @@ def users_list(request, instance_id):
 
 
 def user_create(request, instance_id, username, password,
-                host=None, databases=[]):
+                host=None, databases=[], roles=None):
     user = {'name': username, 'password': password, 'databases': databases}
     if host:
         user['host'] = host
+    if roles:
+        user['roles'] = roles
 
     return troveclient(request).users.create(instance_id, [user])
 
