@@ -76,13 +76,15 @@ class ForceDelete(tables.Action):
                 cluster.task["name"] == 'ERROR')
 
     def single(self, table, request, object_id):
-        try:
-            api.trove.cluster_force_delete(request, object_id)
-            messages.success(request,
-                             _("Successfully forced delete of cluster."))
-        except Exception as e:
-            messages.warning(request,
-                             _("Cannot force delete: %s") % e.message)
+        cluster = table.get_object_by_id(object_id)
+        if cluster:
+            try:
+                api.trove.cluster_force_delete(request, object_id)
+                messages.success(request,
+                                 _("Successfully forced delete of cluster."))
+            except Exception as e:
+                messages.warning(request,
+                                 _("Cannot force delete: %s") % e.message)
 
 
 class ResetStatus(tables.Action):
