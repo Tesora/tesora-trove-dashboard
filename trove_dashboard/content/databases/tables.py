@@ -102,13 +102,15 @@ class ForceDeleteAction(tables.Action):
         return (instance.status == 'BUILD' or instance.status == 'ERROR')
 
     def single(self, table, request, object_id):
-        try:
-            api.trove.instance_force_delete(request, object_id)
-            messages.success(request,
-                             _("Successfully forced delete of instance."))
-        except Exception as e:
-            messages.warning(request,
-                             _("Cannot force delete: %s") % e.message)
+        instance = table.get_object_by_id(object_id)
+        if instance:
+            try:
+                api.trove.instance_force_delete(request, object_id)
+                messages.success(request,
+                                 _("Successfully forced delete of instance."))
+            except Exception as e:
+                messages.warning(request,
+                                 _("Cannot force delete: %s") % e.message)
 
 
 class ResetStatusAction(tables.Action):
