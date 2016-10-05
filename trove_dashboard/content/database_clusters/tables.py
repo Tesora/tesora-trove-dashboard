@@ -42,9 +42,8 @@ from trove_dashboard.content import utils as database_utils
 LOG = logging.getLogger(__name__)
 
 
-class DeleteCluster(tables.BatchAction):
+class DeleteCluster(tables.DeleteAction):
     name = "delete"
-    icon = "remove"
     classes = ('btn-danger',)
     help_text = _("Deleted cluster is not recoverable.")
 
@@ -64,7 +63,7 @@ class DeleteCluster(tables.BatchAction):
             count
         )
 
-    def action(self, request, obj_id):
+    def delete(self, request, obj_id):
         api.trove.cluster_delete(request, obj_id)
 
 
