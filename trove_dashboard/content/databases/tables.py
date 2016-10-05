@@ -93,33 +93,35 @@ class RestartInstance(tables.BatchAction):
         api.trove.instance_restart(request, obj_id)
 
 
-class ForceDeleteAction(tables.Action):
+class ForceDeleteAction(tables.DeleteAction):
     name = "force_delete_action"
     verbose_name = _("Force Delete")
-    classes = ('btn-danger',)
+    help_text = _("Force deleted instances are not recoverable.")
 
-    def allowed(self, request, instance):
-        return (instance.status == 'BUILD' or instance.status == 'ERROR')
+    @staticmethod
+    def action_present(count):
+        return ungettext_lazy(
+            u"Force Delete Instance",
+            u"Force Delete Instances",
+            count
+        )
 
-    def single(self, table, request, object_id):
-        instance = table.get_object_by_id(object_id)
-        if instance:
-            try:
-                api.trove.instance_force_delete(request, object_id)
-                messages.success(request,
-                                 _("Successfully forced delete of instance."))
-            except Exception as e:
-                messages.warning(request,
-                                 _("Cannot force delete: %s") % e.message)
+    @staticmethod
+    def action_past(count):
+        return ungettext_lazy(
+            u"Scheduled forced deletion of instance",
+            u"Scheduled forced deletion of instances",
+            count
+        )
+
+    def delete(self, request, obj_id):
+        api.trove.instance_force_delete(request, obj_id)
 
 
 class ResetStatusAction(tables.Action):
     name = "reset_status_action"
     verbose_name = _("Reset Status")
     classes = ('btn-danger',)
-
-    def allowed(self, request, instance):
-        return (instance.status == 'BUILD' or instance.status == 'ERROR')
 
     def single(self, table, request, object_id):
         try:

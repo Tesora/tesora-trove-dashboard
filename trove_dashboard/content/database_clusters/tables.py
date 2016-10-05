@@ -68,35 +68,35 @@ class DeleteCluster(tables.BatchAction):
         api.trove.cluster_delete(request, obj_id)
 
 
-class ForceDelete(tables.Action):
+class ForceDelete(tables.DeleteAction):
     name = "force_delete_action"
     verbose_name = _("Force Delete")
-    classes = ('btn-danger',)
+    help_text = _("Force deleted instances are not recoverable.")
 
-    def allowed(self, request, cluster):
-        return (cluster.task["name"] == 'BUILDING' or
-                cluster.task["name"] == 'ERROR')
+    @staticmethod
+    def action_present(count):
+        return ungettext_lazy(
+            u"Force Delete Cluster",
+            u"Force Delete Clusters",
+            count
+        )
 
-    def single(self, table, request, object_id):
-        cluster = table.get_object_by_id(object_id)
-        if cluster:
-            try:
-                api.trove.cluster_force_delete(request, object_id)
-                messages.success(request,
-                                 _("Successfully forced delete of cluster."))
-            except Exception as e:
-                messages.warning(request,
-                                 _("Cannot force delete: %s") % e.message)
+    @staticmethod
+    def action_past(count):
+        return ungettext_lazy(
+            u"Scheduled forced deletion of Cluster",
+            u"Scheduled forced deletion of Clusters",
+            count
+        )
+
+    def delete(self, request, obj_id):
+        api.trove.cluster_force_delete(request, obj_id)
 
 
 class ResetStatus(tables.Action):
     name = "reset_status_action"
     verbose_name = _("Reset Status")
     classes = ('btn-danger',)
-
-    def allowed(self, request, cluster):
-        return (cluster.task["name"] == 'BUILDING' or
-                cluster.task["name"] == 'ERROR')
 
     def single(self, table, request, object_id):
         try:

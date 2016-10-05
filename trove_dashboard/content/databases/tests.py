@@ -1484,7 +1484,7 @@ class DatabaseTests(test.TestCase):
         self.mox.ReplayAll()
 
         res = self.client.get(INDEX_URL)
-        self.assertContains(res, 'Force Delete')
+        self.assertContains(res, 'Force Delete Instance')
         self.assertContains(res, 'Reset Status')
 
     @test.create_stubs({
@@ -1506,5 +1506,5 @@ class DatabaseTests(test.TestCase):
         self.mox.ReplayAll()
 
         res = self.client.get(INDEX_URL)
-        self.assertNotContains(res, 'Force Delete')
-        self.assertNotContains(res, 'Reset Status')
+        self.assertContains(res, 'Force Delete Instance')
+        self.assertContains(res, 'Reset Status')

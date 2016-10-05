@@ -38,6 +38,7 @@ STATUS_CHOICES = (
     ("SHUTDOWN", False),
     ("ERROR", False),
     ("RESTART_REQUIRED", None),
+    ("DELETING", None),
 )
 STATUS_DISPLAY_CHOICES = (
     ("ACTIVE", pgettext_lazy("Current status of a Database Instance",
@@ -61,6 +62,8 @@ STATUS_DISPLAY_CHOICES = (
     ("RESTART_REQUIRED",
      pgettext_lazy("Current status of a Database Instance",
                    u"Restart Required")),
+    ("DELETING", pgettext_lazy("Current status of a Database Instance",
+                               u"Deleting")),
 )
 
 
