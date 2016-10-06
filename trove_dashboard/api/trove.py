@@ -123,7 +123,7 @@ def cluster_reset_status(request, cluster_id):
 def cluster_create(request, name, volume, flavor, num_instances,
                    datastore, datastore_version,
                    nics=None, root_password=None, locality=None,
-                   availability_zone=None, region=None,
+                   availability_zone=None, region=None, instance_type=None,
                    extended_properties=None):
     instances = []
     for i in range(num_instances):
@@ -137,6 +137,8 @@ def cluster_create(request, name, volume, flavor, num_instances,
             instance["availability_zone"] = availability_zone
         if region:
             instance["region"] = region
+        if instance_type:
+            instance["type"] = instance_type
         instances.append(instance)
 
     # TODO(saurabhs): vertica needs root password on cluster create

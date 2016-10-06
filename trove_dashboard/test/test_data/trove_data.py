@@ -51,7 +51,8 @@ CLUSTER_DATA_ONE = {
             "volume": {
                 "size": 100
             },
-            "region": "regionOne"
+            "region": "regionOne",
+            "type": ["data"]
         },
         {
             "id": "965ef811-7c1d-47fc-89f2-a89dfdd23ef2",
@@ -65,7 +66,8 @@ CLUSTER_DATA_ONE = {
             "volume": {
                 "size": 100
             },
-            "region": "regionOne"
+            "region": "regionOne",
+            "type": ["data"]
         },
         {
             "id": "3642f41c-e8ad-4164-a089-3891bf7f2d2b",
@@ -79,7 +81,8 @@ CLUSTER_DATA_ONE = {
             "volume": {
                 "size": 100
             },
-            "region": "regionOne"
+            "region": "regionOne",
+            "type": ["data"]
         }
     ],
     "task": {

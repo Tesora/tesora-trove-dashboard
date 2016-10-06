@@ -72,6 +72,10 @@ class LaunchForm(forms.SelfHandlingForm):
         help_text=_("Specify whether instances in the cluster will "
                     "be created on the same hypervisor (affinity) or on "
                     "different hypervisors (anti-affinity)."))
+    instance_type = forms.CharField(
+        label=_("Type"),
+        required=False,
+        help_text=_("Cluster node type"))
     root_password = forms.CharField(
         label=_("Root Password"),
         required=False,
@@ -456,6 +460,12 @@ class LaunchForm(forms.SelfHandlingForm):
             region = data['region']
         return region
 
+    def _get_instance_type(self, data):
+        instance_type = None
+        if data.get('instance_type'):
+            instance_type = data['instance_type'].strip().split(",")
+        return instance_type
+
     def _build_extended_properties(self, data, datastore):
         extended_properties = None
 
@@ -498,10 +508,11 @@ class LaunchForm(forms.SelfHandlingForm):
             LOG.info("Launching cluster with parameters "
                      "{name=%s, volume=%s, flavor=%s, "
                      "datastore=%s, datastore_version=%s,"
-                     "locality=%s, AZ=%s, region=%s",
+                     "locality=%s, AZ=%s, region=%s, instance_type=%s",
                      data['name'], data['volume'], flavor,
                      datastore, datastore_version, self._get_locality(data),
-                     avail_zone, self._get_region(data))
+                     avail_zone, self._get_region(data),
+                     self._get_instance_type(data))
 
             trove_api.trove.cluster_create(request,
                                            data['name'],
@@ -515,6 +526,8 @@ class LaunchForm(forms.SelfHandlingForm):
                                            locality=self._get_locality(data),
                                            availability_zone=avail_zone,
                                            region=self._get_region(data),
+                                           instance_type=(
+                                               self._get_instance_type(data)),
                                            extended_properties=(
                                                extended_properties
                                            ))

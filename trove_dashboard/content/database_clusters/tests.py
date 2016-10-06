@@ -301,6 +301,7 @@ class ClustersTests(test.TestCase):
             locality=None,
             availability_zone=IsA(six.text_type),
             region=None,
+            instance_type=None,
             extended_properties=None
         ).AndReturn(self.trove_clusters.first())
 
@@ -369,6 +370,7 @@ class ClustersTests(test.TestCase):
             locality=None,
             availability_zone=IsA(six.text_type),
             region=None,
+            instance_type=None,
             extended_properties=None
         ).AndReturn(self.trove_clusters.first())
 
