@@ -19,6 +19,7 @@ from django.utils.translation import ungettext_lazy
 from horizon import tables
 
 from trove_dashboard import api
+from trove_dashboard.content.databases import db_capability
 from trove_dashboard.content import utils as database_utils
 
 
@@ -28,7 +29,9 @@ class ManageBuckets(tables.LinkAction):
     url = "horizon:project:databases:couchbase:manage_buckets"
 
     def allowed(self, request, instance=None):
-        return instance.status in database_utils.ACTIVE_STATES
+        return (instance.status in database_utils.ACTIVE_STATES and
+                db_capability.is_couchbase_datastore(
+                    instance.datastore['type']))
 
     def get_link_url(self, datum):
         return urlresolvers.reverse(self.url, args=[datum.id])
