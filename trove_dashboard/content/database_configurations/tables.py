@@ -232,14 +232,38 @@ class DetachConfiguration(tables.BatchAction):
     name = "detach_configuration"
     classes = ('btn-danger', 'btn-detach-config')
 
+    def allowed(self, request, instance=None):
+        if hasattr(instance, 'cluster_id'):
+            return False
+        return True
+
     def action(self, request, obj_id):
         api.trove.instance_detach_configuration(request, obj_id)
+
+
+def get_cluster_info(config_instance):
+    if hasattr(config_instance, 'cluster_id'):
+        return config_instance.cluster_id
+    else:
+        return None
+
+
+def get_cluster_link(datum):
+    if hasattr(datum, 'cluster_id'):
+        return urlresolvers.reverse("horizon:project:database_clusters:detail",
+                                    args=(datum.cluster_id,))
+    else:
+        return None
 
 
 class InstancesTable(tables.DataTable):
     name = tables.Column("name",
                          link="horizon:project:databases:detail",
                          verbose_name=_("Name"))
+    cluster_id = tables.Column(
+        get_cluster_info,
+        link=get_cluster_link,
+        verbose_name=_('Cluster ID'))
 
     class Meta(object):
         name = "instances"
