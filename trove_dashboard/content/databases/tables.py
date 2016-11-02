@@ -251,7 +251,8 @@ class GrantAccess(tables.BatchAction):
             self.table.kwargs['instance_id'],
             self.table.kwargs['user_name'],
             [obj_id],
-            host=self.table.kwargs['user_host'])
+            host=database_utils.parse_user_host(self.table.kwargs[
+                                                'user_host']))
 
 
 class RevokeAccess(tables.BatchAction):
@@ -285,7 +286,8 @@ class RevokeAccess(tables.BatchAction):
             self.table.kwargs['instance_id'],
             self.table.kwargs['user_name'],
             obj_id,
-            host=self.table.kwargs['user_host'])
+            host=database_utils.parse_user_host(self.table.kwargs[
+                                                'user_host']))
 
 
 class AccessTable(tables.DataTable):
@@ -319,7 +321,8 @@ class ManageAccess(tables.LinkAction):
         user = datum
         return urlresolvers.reverse(self.url, args=[user.instance.id,
                                                     user.name,
-                                                    user.host])
+                                                    getattr(user, 'host', '-')
+                                                    ])
 
 
 class CreateUser(tables.LinkAction):
@@ -358,7 +361,8 @@ class EditUser(tables.LinkAction):
         user = datum
         return urlresolvers.reverse(self.url, args=[user.instance.id,
                                                     user.name,
-                                                    user.host])
+                                                    getattr(user, 'host', '-')
+                                                    ])
 
     def get_table_id(self):
         return self.table.kwargs['instance_id']
@@ -391,7 +395,7 @@ class DeleteUser(tables.DeleteAction):
     def delete(self, request, obj_id):
         user = self.table.get_object_by_id(obj_id)
         api.trove.user_delete(request, user.instance.id, user.name,
-                              host=user.host)
+                              host=getattr(user, 'host', None))
 
 
 class CreateDatabase(tables.LinkAction):

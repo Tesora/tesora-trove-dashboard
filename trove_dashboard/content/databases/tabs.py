@@ -88,7 +88,9 @@ class UserTab(tabs.TableTab):
                     user.access = api.trove.user_list_access(self.request,
                                                              instance.id,
                                                              user.name,
-                                                             host=user.host)
+                                                             host=getattr(
+                                                                 user, 'host',
+                                                                 None))
                 except exceptions.NOT_FOUND:
                     pass
                 except trove_exceptions.BadRequest as e:

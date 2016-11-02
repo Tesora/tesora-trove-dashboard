@@ -24,6 +24,7 @@ from horizon.utils import validators
 
 from trove_dashboard import api
 from trove_dashboard.content.databases import db_capability
+from trove_dashboard.content import utils
 
 
 class CreateDatabaseForm(forms.SelfHandlingForm):
@@ -262,7 +263,7 @@ class EditUserForm(forms.SelfHandlingForm):
                 request,
                 instance,
                 data['user_name'],
-                host=data['user_host'],
+                host=utils.parse_user_host(data['user_host']),
                 new_name=data['new_name'],
                 new_password=data['new_password'],
                 new_host=data['new_host'])

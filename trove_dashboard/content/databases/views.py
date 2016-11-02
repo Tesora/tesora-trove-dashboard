@@ -38,7 +38,9 @@ from trove_dashboard.content.databases import forms
 from trove_dashboard.content.databases import tables
 from trove_dashboard.content.databases import tabs
 from trove_dashboard.content.databases import workflows
+from trove_dashboard.content import utils
 from trove_dashboard.templatetags.tesora import tesora_version
+
 
 LOG = logging.getLogger(__name__)
 
@@ -194,7 +196,7 @@ class AccessDetailView(horizon_tables.DataTableView):
     def get_data(self):
         instance_id = self.kwargs['instance_id']
         user_name = self.kwargs['user_name']
-        user_host = self.kwargs['user_host']
+        user_host = utils.parse_user_host(self.kwargs['user_host'])
         try:
             databases = api.trove.database_list(self.request, instance_id)
         except Exception:
