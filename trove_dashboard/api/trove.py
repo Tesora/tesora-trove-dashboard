@@ -120,6 +120,15 @@ def cluster_reset_status(request, cluster_id):
     return troveclient(request).clusters.reset_status(cluster_id)
 
 
+def cluster_configuration_attach(request, cluster_id, configuration):
+    return troveclient(request).clusters.configuration_attach(
+        cluster_id, configuration)
+
+
+def cluster_configuration_detach(request, cluster_id):
+    return troveclient(request).clusters.configuration_detach(cluster_id)
+
+
 def cluster_create(request, name, volume, flavor, num_instances,
                    datastore, datastore_version,
                    nics=None, root_password=None, locality=None,
@@ -173,6 +182,10 @@ def cluster_grow(request, cluster_id, new_instances):
             instance["region"] = new_instance.region
         instances.append(instance)
     return troveclient(request).clusters.grow(cluster_id, instances)
+
+
+def cluster_restart(request, cluster_id):
+    return troveclient(request).clusters.restart(cluster_id)
 
 
 def cluster_shrink(request, cluster_id, instances):
