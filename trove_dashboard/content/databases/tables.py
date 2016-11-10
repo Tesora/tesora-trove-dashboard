@@ -338,11 +338,11 @@ class CreateUser(tables.LinkAction):
                 has_user_add_perm(request))
 
     def get_link_url(self, datum=None):
-        instance_id = self.get_table_id()
-        return urlresolvers.reverse(self.url, args=[instance_id])
+        instance = self.get_table_id()
+        return urlresolvers.reverse(self.url, args=[instance.id])
 
     def get_table_id(self):
-        return self.table.kwargs['instance_id']
+        return self.table.kwargs['instance']
 
 
 class EditUser(tables.LinkAction):
@@ -365,7 +365,7 @@ class EditUser(tables.LinkAction):
                                                     ])
 
     def get_table_id(self):
-        return self.table.kwargs['instance_id']
+        return self.table.kwargs['instance']
 
 
 def has_user_add_perm(request):
@@ -411,11 +411,11 @@ class CreateDatabase(tables.LinkAction):
                 has_database_add_perm(request))
 
     def get_link_url(self, datum=None):
-        instance_id = self.get_table_id()
-        return urlresolvers.reverse(self.url, args=[instance_id])
+        instance = self.get_table_id()
+        return urlresolvers.reverse(self.url, args=[instance.id])
 
     def get_table_id(self):
-        return self.table.kwargs['instance_id']
+        return self.table.kwargs['instance']
 
 
 def has_database_add_perm(request):
