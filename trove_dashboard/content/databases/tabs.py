@@ -109,7 +109,9 @@ class UserTab(tabs.TableTab):
         return data
 
     def allowed(self, request):
-        return tables.has_user_add_perm(request)
+        instance = self.tab_group.kwargs['instance']
+        return (tables.has_database_add_perm(request) and
+                db_capability.has_users(instance.datastore['type']))
 
 
 class DatabaseTab(tabs.TableTab):
@@ -140,7 +142,9 @@ class DatabaseTab(tabs.TableTab):
         return data
 
     def allowed(self, request):
-        return tables.has_database_add_perm(request)
+        instance = self.tab_group.kwargs['instance']
+        return (tables.has_database_add_perm(request) and
+                db_capability.has_databases(instance.datastore['type']))
 
 
 class ConfigDefaultsTab(tabs.TableTab):

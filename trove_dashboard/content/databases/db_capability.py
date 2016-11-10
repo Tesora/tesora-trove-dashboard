@@ -52,6 +52,18 @@ def can_modify_cluster(datastore):
                                  _cluster_grow_shrink_capable_datastores)
 
 
+def has_users(datastore):
+    if is_couchbase_datastore(datastore):
+        return False
+    return True
+
+
+def has_databases(datastore):
+    if is_couchbase_datastore(datastore):
+        return False
+    return True
+
+
 def is_cluster_capable_datastore(datastore):
     return _is_datastore_in_list(datastore, _cluster_capable_datastores)
 
