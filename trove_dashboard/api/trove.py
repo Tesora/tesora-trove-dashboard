@@ -112,12 +112,14 @@ def cluster_delete(request, cluster_id):
 
 
 def cluster_force_delete(request, cluster_id):
-    cluster_reset_status(request, cluster_id)
+    cluster_reset_status(request, cluster_id, force_delete=True)
     return cluster_delete(request, cluster_id)
 
 
-def cluster_reset_status(request, cluster_id):
-    return troveclient(request).clusters.reset_status(cluster_id)
+def cluster_reset_status(request, cluster_id, force_delete=False):
+    return troveclient(request).clusters.reset_status(cluster_id,
+                                                      force_delete=(
+                                                          force_delete))
 
 
 def cluster_configuration_attach(request, cluster_id, configuration):
@@ -256,12 +258,14 @@ def instance_delete(request, instance_id):
 
 
 def instance_force_delete(request, instance_id):
-    instance_reset_status(request, instance_id)
+    instance_reset_status(request, instance_id, force_delete=True)
     return instance_delete(request, instance_id)
 
 
-def instance_reset_status(request, instance_id):
-    return troveclient(request).instances.reset_status(instance_id)
+def instance_reset_status(request, instance_id, force_delete=False):
+    return troveclient(request).instances.reset_status(instance_id,
+                                                       force_delete=(
+                                                           force_delete))
 
 
 def instance_create(request, name, volume, flavor, databases=None,
