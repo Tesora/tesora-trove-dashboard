@@ -135,7 +135,7 @@ def cluster_create(request, name, volume, flavor, num_instances,
                    datastore, datastore_version,
                    nics=None, root_password=None, locality=None,
                    availability_zone=None, region=None, instance_type=None,
-                   extended_properties=None):
+                   extended_properties=None, configuration=None):
     instances = []
     for i in range(num_instances):
         instance = {}
@@ -159,7 +159,8 @@ def cluster_create(request, name, volume, flavor, num_instances,
         datastore_version,
         instances=instances,
         locality=locality,
-        extended_properties=extended_properties
+        extended_properties=extended_properties,
+        configuration=configuration
     )
 
 
