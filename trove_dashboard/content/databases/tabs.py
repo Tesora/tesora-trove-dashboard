@@ -25,6 +25,10 @@ from trove_dashboard.content.database_configurations import (
 from trove_dashboard.content.databases import db_capability
 from trove_dashboard.content.databases.logs import tables as log_tables
 from trove_dashboard.content.databases import tables
+from troveclient import exceptions as trove_exceptions
+
+
+LOG = logging.getLogger(__name__)
 
 
 LOG = logging.getLogger(__name__)
@@ -61,6 +65,10 @@ class OverviewTab(tabs.Tab):
     def _get_template_type(self, datastore):
         if db_capability.is_mysql_compatible(datastore):
             return 'mysql'
+        elif db_capability.is_oracle_ra_datastore(datastore):
+            return 'oracle'
+        elif db_capability.is_datastax_enterprise(datastore):
+            return 'cassandra'
 
         return datastore
 
@@ -82,9 +90,18 @@ class UserTab(tabs.TableTab):
                 try:
                     user.access = api.trove.user_list_access(self.request,
                                                              instance.id,
-                                                             user.name)
+                                                             user.name,
+                                                             host=getattr(
+                                                                 user, 'host',
+                                                                 None))
                 except exceptions.NOT_FOUND:
                     pass
+                except trove_exceptions.BadRequest as e:
+                    if not ("The 'list_access' operation "
+                            "is not supported") in e.message:
+                        raise
+                    LOG.info("List user access is not available.  "
+                             "Reason: %s", e.message)
                 except Exception:
                     msg = _('Unable to get user access data.')
                     exceptions.handle(self.request, msg)
@@ -95,7 +112,9 @@ class UserTab(tabs.TableTab):
         return data
 
     def allowed(self, request):
-        return tables.has_user_add_perm(request)
+        instance = self.tab_group.kwargs['instance']
+        return (tables.has_database_add_perm(request) and
+                db_capability.has_users(instance.datastore['type']))
 
 
 class DatabaseTab(tabs.TableTab):
@@ -112,6 +131,13 @@ class DatabaseTab(tabs.TableTab):
             data = api.trove.database_list(self.request, instance.id)
             add_instance = lambda d: setattr(d, 'instance', instance)
             map(add_instance, data)
+        except trove_exceptions.BadRequest as e:
+            data = []
+            if not ("The 'list_databases' operation "
+                    "is not supported") in e.message:
+                raise
+            LOG.info("List database is not available.  "
+                     "Reason: %s", e.message)
         except Exception:
             msg = _('Unable to get databases data.')
             exceptions.handle(self.request, msg)
@@ -119,7 +145,9 @@ class DatabaseTab(tabs.TableTab):
         return data
 
     def allowed(self, request):
-        return tables.has_database_add_perm(request)
+        instance = self.tab_group.kwargs['instance']
+        return (tables.has_database_add_perm(request) and
+                db_capability.has_databases(instance.datastore['type']))
 
 
 class ConfigDefaultsTab(tabs.TableTab):
@@ -160,7 +188,14 @@ class BackupsTab(tabs.TableTab):
         return data
 
     def allowed(self, request):
-        return request.user.has_perm('openstack.services.object-store')
+        return (request.user.has_perm('openstack.services.object-store') and
+                self._has_backup_capability(self.tab_group.kwargs))
+
+    def _has_backup_capability(self, kwargs):
+        instance = kwargs['instance']
+        if (instance is not None):
+            return db_capability.can_backup(instance.datastore['type'])
+        return True
 
 
 class LogsTab(tabs.TableTab):

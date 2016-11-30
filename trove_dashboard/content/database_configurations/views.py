@@ -88,6 +88,12 @@ class CreateConfigurationView(horizon_forms.ModalFormView):
     submit_url = reverse_lazy('horizon:project:database_configurations:create')
     success_url = reverse_lazy('horizon:project:database_configurations:index')
 
+    def get_context_data(self, **kwargs):
+        context = (super(CreateConfigurationView, self)
+                   .get_context_data(**kwargs))
+        context['submit_url'] = self.submit_url
+        return context
+
 
 class AddParameterView(horizon_forms.ModalFormView):
     form_class = forms.AddParameterForm

@@ -14,18 +14,39 @@
 
 
 CASSANDRA = "cassandra"
+COUCHBASE = "couchbase"
+DSE = "dse"
 MARIA = "maria"
 MONGODB = "mongodb"
 MYSQL = "mysql"
+ORACLE = "oracle"
+ORACLE_RA = "oracle_ra"
+ORACLE_RAC = "oracle_rac"
 PERCONA = "percona"
 PERCONA_CLUSTER = "pxc"
 REDIS = "redis"
 VERTICA = "vertica"
 
 _mysql_compatible_datastores = (MYSQL, MARIA, PERCONA, PERCONA_CLUSTER)
-_cluster_capable_datastores = (CASSANDRA, MARIA, MONGODB, PERCONA_CLUSTER,
-                               REDIS, VERTICA)
-_cluster_grow_shrink_capable_datastores = (CASSANDRA, MARIA, MONGODB, REDIS)
+_oracle_compatible_datastores = (ORACLE, ORACLE_RA, ORACLE_RAC)
+_cluster_capable_datastores = (CASSANDRA, COUCHBASE, DSE, MARIA, MONGODB,
+                               ORACLE_RAC, PERCONA_CLUSTER, REDIS, VERTICA)
+_cluster_grow_shrink_capable_datastores = (CASSANDRA, COUCHBASE, DSE, MARIA,
+                                           MONGODB, PERCONA_CLUSTER, REDIS)
+_cluster_configuration_capable_datastores = (CASSANDRA, DSE, MARIA,
+                                             PERCONA_CLUSTER)
+
+
+def can_backup(datastore):
+    if is_oracle_ra_datastore(datastore):
+        return False
+    return True
+
+
+def can_launch_from_master(datastore):
+    if is_oracle_ra_datastore(datastore):
+        return False
+    return True
 
 
 def can_modify_cluster(datastore):
@@ -33,8 +54,53 @@ def can_modify_cluster(datastore):
                                  _cluster_grow_shrink_capable_datastores)
 
 
+def has_users(datastore):
+    if is_couchbase_datastore(datastore):
+        return False
+    return True
+
+
+def has_databases(datastore):
+    if is_couchbase_datastore(datastore):
+        return False
+    return True
+
+
+def supports_configuration(datastore):
+    return _is_datastore_in_list(datastore,
+                                 _cluster_configuration_capable_datastores)
+
+
+def is_cluster_capable_datastore(datastore):
+    return _is_datastore_in_list(datastore, _cluster_capable_datastores)
+
+
+def is_couchbase_datastore(datastore):
+    return (datastore is not None) and (COUCHBASE in datastore.lower())
+
+
+def is_datastax_enterprise(datastore):
+    return (datastore is not None) and (DSE in datastore.lower())
+
+
 def is_mongodb_datastore(datastore):
     return (datastore is not None) and (MONGODB in datastore.lower())
+
+
+def is_mysql_compatible(datastore):
+    return _is_datastore_in_list(datastore, _mysql_compatible_datastores)
+
+
+def is_oracle_compatible_datastore(datastore):
+    return _is_datastore_in_list(datastore, _oracle_compatible_datastores)
+
+
+def is_oracle_ra_datastore(datastore):
+    return (datastore is not None) and (ORACLE_RA == datastore.lower())
+
+
+def is_oracle_rac_datastore(datastore):
+    return (datastore is not None) and (ORACLE_RAC in datastore.lower())
 
 
 def is_percona_cluster_datastore(datastore):
@@ -49,12 +115,10 @@ def is_vertica_datastore(datastore):
     return (datastore is not None) and (VERTICA in datastore.lower())
 
 
-def is_mysql_compatible(datastore):
-    return _is_datastore_in_list(datastore, _mysql_compatible_datastores)
-
-
-def is_cluster_capable_datastore(datastore):
-    return _is_datastore_in_list(datastore, _cluster_capable_datastores)
+def require_configuration_group(datastore):
+    if is_oracle_ra_datastore(datastore):
+        return True
+    return False
 
 
 def _is_datastore_in_list(datastore, datastores):

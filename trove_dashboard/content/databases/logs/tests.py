@@ -48,18 +48,22 @@ class LogsTests(test.TestCase):
         return self.swiftclient
 
     @test.create_stubs({
-        api.trove: ('flavor_get', 'instance_get', 'log_list', 'root_show')})
+        api.trove: ('datastore_version_list', 'flavor_get',
+                    'instance_get', 'log_list', 'root_show')
+    })
     def test_log_tab(self):
         database = self.databases.first()
         database_id = database.id
 
+        (api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str))
+            .MultipleTimes().AndReturn(self.datastore_versions.list()))
         (api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))
             .AndReturn(database))
         (api.trove.log_list(IsA(http.HttpRequest), database_id)
             .AndReturn(self.logs.list()))
         (api.trove.flavor_get(IsA(http.HttpRequest), database.flavor["id"])
             .AndReturn(self.flavors.first()))
-        (api.trove.root_show(IsA(http.HttpRequest), database.id)
+        (api.trove.root_show(IsA(http.HttpRequest), IsA(str))
             .AndReturn(self.database_user_roots.first()))
 
         self.mox.ReplayAll()
@@ -74,18 +78,22 @@ class LogsTests(test.TestCase):
             res, 'horizon/common/_detail_table.html')
 
     @test.create_stubs({
-        api.trove: ('flavor_get', 'instance_get', 'log_list', 'root_show')})
+        api.trove: ('datastore_version_list', 'flavor_get',
+                    'instance_get', 'log_list', 'root_show')
+    })
     def test_log_tab_exception(self):
         database = self.databases.first()
         database_id = database.id
 
+        (api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str))
+            .MultipleTimes().AndReturn(self.datastore_versions.list()))
         (api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))
             .AndReturn(database))
         (api.trove.log_list(IsA(http.HttpRequest), database_id)
             .AndRaise(self.exceptions.trove))
         (api.trove.flavor_get(IsA(http.HttpRequest), database.flavor["id"])
             .AndReturn(self.flavors.first()))
-        (api.trove.root_show(IsA(http.HttpRequest), database.id)
+        (api.trove.root_show(IsA(http.HttpRequest), IsA(str))
             .AndReturn(self.database_user_roots.first()))
 
         self.mox.ReplayAll()

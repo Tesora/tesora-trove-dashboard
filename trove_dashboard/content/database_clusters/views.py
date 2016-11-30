@@ -33,6 +33,7 @@ from horizon import tabs as horizon_tabs
 from horizon.utils import memoized
 
 from trove_dashboard import api
+from trove_dashboard.content.database_backups import views as backup_views
 from trove_dashboard.content.database_clusters \
     import cluster_manager
 from trove_dashboard.content.database_clusters import forms
@@ -193,6 +194,13 @@ class ClusterAddInstancesView(horizon_forms.ModalFormView):
     def get_initial(self):
         initial = super(ClusterAddInstancesView, self).get_initial()
         initial['cluster_id'] = self.kwargs['cluster_id']
+        try:
+            cluster = api.trove.cluster_get(self.request,
+                                            initial['cluster_id'])
+            initial['datastore'] = cluster.datastore
+        except Exception:
+            msg = _('Unable to retrieve cluster details.')
+            exceptions.handle(self.request, msg)
         return initial
 
     def get_success_url(self):
@@ -260,3 +268,12 @@ class ResetPasswordView(horizon_forms.ModalFormView):
 
     def get_initial(self):
         return {'cluster_id': self.kwargs['cluster_id']}
+
+
+class BackupInstanceView(backup_views.BackupView):
+
+    def get_context_data(self, **kwargs):
+        context = super(BackupInstanceView, self).get_context_data(**kwargs)
+        context["instance_id"] = kwargs.get("instance_id")
+        self._instance = context['instance_id']
+        return context

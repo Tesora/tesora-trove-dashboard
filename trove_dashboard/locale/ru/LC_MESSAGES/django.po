@@ -1,5 +1,6 @@
 # Andreas Jaeger <jaegerandi@gmail.com>, 2016. #zanata
 # Artem <amikhalev90@gmail.com>, 2016. #zanata
+# Ilya Alekseyev <ilyaalekseyev@acm.org>, 2016. #zanata
 # Maxim Bozhenko <mbozhenko@gmail.com>, 2016. #zanata
 # Vladimir Sokolov <vsvastey@gmail.com>, 2016. #zanata
 # Yulia Ryndenkova <yryndenkova@hystax.com>, 2016. #zanata

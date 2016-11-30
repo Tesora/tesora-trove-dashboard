@@ -47,6 +47,8 @@ class OverviewTab(tabs.Tab):
     def _get_template_type(self, datastore):
         if db_capability.is_mysql_compatible(datastore):
             return 'mysql'
+        elif db_capability.is_datastax_enterprise(datastore):
+            return 'cassandra'
 
         return datastore
 

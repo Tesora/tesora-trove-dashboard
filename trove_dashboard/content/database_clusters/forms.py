@@ -16,6 +16,7 @@
 import logging
 import uuid
 
+from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.debug import sensitive_variables  # noqa
@@ -25,16 +26,22 @@ from horizon import forms
 from horizon import messages
 from horizon.utils import memoized
 from openstack_dashboard import api
+from openstack_dashboard.dashboards.project.instances \
+    import utils as instance_utils
 
 from trove_dashboard import api as trove_api
 from trove_dashboard.content.database_clusters \
     import cluster_manager
 from trove_dashboard.content.databases import db_capability
+from trove_dashboard.content import utils
 
 LOG = logging.getLogger(__name__)
 
 
 class LaunchForm(forms.SelfHandlingForm):
+    availability_zone = forms.ChoiceField(
+        label=_("Availability Zone"),
+        required=False)
     name = forms.CharField(label=_("Cluster Name"),
                            max_length=80)
     datastore = forms.ChoiceField(
@@ -44,22 +51,6 @@ class LaunchForm(forms.SelfHandlingForm):
             'class': 'switchable',
             'data-slug': 'datastore'
         }))
-    flavor = forms.ChoiceField(
-        label=_("Flavor"),
-        help_text=_("Size of instance to launch."),
-        required=False,
-        widget=forms.Select(attrs={
-            'class': 'switched',
-            'data-switch-on': 'datastore',
-        }))
-    vertica_flavor = forms.ChoiceField(
-        label=_("Flavor"),
-        help_text=_("Size of instance to launch."),
-        required=False,
-        widget=forms.Select(attrs={
-            'class': 'switched',
-            'data-switch-on': 'datastore',
-        }))
     network = forms.ChoiceField(
         label=_("Network"),
         help_text=_("Network attached to instance."),
@@ -67,8 +58,11 @@ class LaunchForm(forms.SelfHandlingForm):
     volume = forms.IntegerField(
         label=_("Volume Size"),
         min_value=0,
-        initial=1,
+        initial=getattr(settings, "TROVE_DEFAULT_CLUSTER_VOL_SIZE", 1),
         help_text=_("Size of the volume in GB."))
+    region = forms.ChoiceField(
+        label=_("Region"),
+        required=False)
     locality = forms.ChoiceField(
         label=_("Locality"),
         choices=[("", "None"),
@@ -78,6 +72,10 @@ class LaunchForm(forms.SelfHandlingForm):
         help_text=_("Specify whether instances in the cluster will "
                     "be created on the same hypervisor (affinity) or on "
                     "different hypervisors (anti-affinity)."))
+    instance_type = forms.CharField(
+        label=_("Type"),
+        required=False,
+        help_text=_("Cluster node type"))
     root_password = forms.CharField(
         label=_("Root Password"),
         required=False,
@@ -117,18 +115,74 @@ class LaunchForm(forms.SelfHandlingForm):
             'class': 'switched',
             'data-switch-on': 'datastore',
         }))
+    oracle_rac_database = forms.CharField(
+        label=_("Database"),
+        required=False,
+        help_text=_("Specify the name of the initial database."),
+        widget=forms.TextInput(attrs={
+            'class': 'switched',
+            'data-switch-on': 'datastore',
+        }))
+    oracle_rac_subnet = forms.CharField(
+        label=_("Subnet"),
+        required=False,
+        help_text=_("Subnet of the cluster."),
+        widget=forms.TextInput(attrs={
+            'class': 'switched',
+            'data-switch-on': 'datastore',
+        }))
+    oracle_rac_storage_type = forms.CharField(
+        label=_("Storage Type"),
+        initial='nfs',
+        required=False,
+        help_text=_("Storage type of cluster. (Read only)"),
+        widget=forms.TextInput(attrs={
+            'readonly': 'readonly',
+            'class': 'switched',
+            'data-switch-on': 'datastore',
+        }))
+    oracle_rac_votedisk_mount = forms.CharField(
+        label=_("Voting Files Disk Mount"),
+        required=False,
+        help_text=_("Specify the voting files disk mount."),
+        widget=forms.TextInput(attrs={
+            'class': 'switched',
+            'data-switch-on': 'datastore',
+        }))
+    oracle_rac_registry_mount = forms.CharField(
+        label=_("Registry Mount"),
+        required=False,
+        help_text=_("Specify the registry mount."),
+        widget=forms.TextInput(attrs={
+            'class': 'switched',
+            'data-switch-on': 'datastore',
+        }))
+    oracle_rac_database_mount = forms.CharField(
+        label=_("Database Mount"),
+        required=False,
+        help_text=_("Specify the database mount."),
+        widget=forms.TextInput(attrs={
+            'class': 'switched',
+            'data-switch-on': 'datastore',
+        }))
 
     # (name of field variable, label)
     default_fields = [
-        ('flavor', _('Flavor')),
         ('num_instances', _('Number of Instances'))
     ]
     mongodb_fields = default_fields + [
         ('num_shards', _('Number of Shards')),
     ]
+    oracle_rac_fields = default_fields + [
+        ('oracle_rac_database', _('Database')),
+        ('oracle_rac_subnet', _('Subnet')),
+        ('oracle_rac_storage_type', _('Storage Type')),
+        ('oracle_rac_votedisk_mount', _('Voting Files Disk Mount')),
+        ('oracle_rac_registry_mount', _('Registry Mount')),
+        ('oracle_rac_database_mount', _('Database Mount'))
+    ]
     vertica_fields = [
         ('num_instances_vertica', ('Number of Instances')),
-        ('vertica_flavor', _('Flavor')),
         ('root_password', _('Root Password')),
     ]
 
@@ -137,27 +191,32 @@ class LaunchForm(forms.SelfHandlingForm):
 
         self.fields['datastore'].choices = self.populate_datastore_choices(
             request)
-        self.populate_flavor_choices(request)
-
         self.fields['network'].choices = self.populate_network_choices(
             request)
+        self.fields['availability_zone'].choices = (
+            self.populate_availability_zone_choices(request))
+        self.fields['region'].choices = self.populate_region_choices(
+            request)
+        if not getattr(settings, 'DATABASE_ENABLE_REGION_SUPPORT', False):
+            self.fields['region'].widget = forms.HiddenInput()
 
     def clean(self):
         datastore_field_value = self.data.get("datastore", None)
         if datastore_field_value:
-            datastore = datastore_field_value.split(',')[0]
+            datastore, datastore_version = (
+                utils.parse_datastore_and_version_text(datastore_field_value))
+
+            flavor_field_name = utils.build_widget_field_name(
+                datastore, datastore_version)
+            if not self.data.get(flavor_field_name, None):
+                msg = _("The flavor must be specified.")
+                self._errors[flavor_field_name] = self.error_class([msg])
 
             if db_capability.is_vertica_datastore(datastore):
-                if not self.data.get("vertica_flavor", None):
-                    msg = _("The flavor must be specified.")
-                    self._errors["vertica_flavor"] = self.error_class([msg])
                 if not self.data.get("root_password", None):
                     msg = _("Password for root user must be specified.")
                     self._errors["root_password"] = self.error_class([msg])
             else:
-                if not self.data.get("flavor", None):
-                    msg = _("The flavor must be specified.")
-                    self._errors["flavor"] = self.error_class([msg])
                 if int(self.data.get("num_instances", 0)) < 1:
                     msg = _("The number of instances must be greater than 1.")
                     self._errors["num_instances"] = self.error_class([msg])
@@ -167,8 +226,38 @@ class LaunchForm(forms.SelfHandlingForm):
                         msg = _("The number of shards must be greater than 1.")
                         self._errors["num_shards"] = self.error_class([msg])
 
+                if db_capability.is_oracle_rac_datastore(datastore):
+                    if not self.data.get("oracle_rac_database", None):
+                        msg = _("Database must be specified.")
+                        self._errors["oracle_rac_database"] = (
+                            self.error_class([msg])
+                        )
+                    if not self.data.get("oracle_rac_subnet", None):
+                        msg = _("Subnet must be specified.")
+                        self._errors["oracle_rac_subnet"] = (
+                            self.error_class([msg])
+                        )
+                    if not self.data.get("oracle_rac_votedisk_mount", None):
+                        msg = _("Voting Files Disk Mount must be specified.")
+                        self._errors["oracle_rac_votedisk_mount"] = (
+                            self.error_class([msg])
+                        )
+                    if not self.data.get("oracle_rac_registry_mount", None):
+                        msg = _("Registry mount must be specified.")
+                        self._errors["oracle_rac_registry_mount"] = (
+                            self.error_class([msg])
+                        )
+                    if not self.data.get("oracle_rac_database_mount", None):
+                        msg = _("Database mount must be specified.")
+                        self._errors["oracle_rac_database_mount"] = (
+                            self.error_class([msg])
+                        )
+
         if not self.data.get("locality", None):
             self.cleaned_data["locality"] = None
+
+        if not self.data.get("region", None):
+            self.cleaned_data["region"] = None
 
         return self.cleaned_data
 
@@ -184,24 +273,6 @@ class LaunchForm(forms.SelfHandlingForm):
             exceptions.handle(request,
                               _('Unable to obtain flavors.'),
                               redirect=redirect)
-
-    def populate_flavor_choices(self, request):
-        valid_flavor = []
-        for ds in self.datastores(request):
-            # TODO(michayu): until capabilities lands
-            field_name = 'flavor'
-            if db_capability.is_vertica_datastore(ds.name):
-                field_name = 'vertica_flavor'
-
-            versions = self.datastore_versions(request, ds.name)
-            for version in versions:
-                if hasattr(version, 'active') and not version.active:
-                    continue
-                valid_flavor = self.datastore_flavors(request, ds.name,
-                                                      versions[0].name)
-                if valid_flavor:
-                    self.fields[field_name].choices = sorted(
-                        [(f.id, "%s" % f.name) for f in valid_flavor])
 
     @memoized.memoized_method
     def populate_network_choices(self, request):
@@ -222,6 +293,43 @@ class LaunchForm(forms.SelfHandlingForm):
                               _('Unable to retrieve networks.'),
                               redirect=redirect)
         return network_list
+
+    @memoized.memoized_method
+    def populate_availability_zone_choices(self, request):
+        try:
+            zones = api.nova.availability_zone_list(request)
+        except Exception:
+            zones = []
+            redirect = reverse('horizon:project:database_clusters:index')
+            exceptions.handle(request,
+                              _('Unable to retrieve availability zones.'),
+                              redirect=redirect)
+
+        zone_list = [(zone.zoneName, zone.zoneName)
+                     for zone in zones if zone.zoneState['available']]
+        zone_list.sort()
+        if not zone_list:
+            zone_list.insert(0, ("", _("No availability zones found")))
+        elif len(zone_list) > 1:
+            zone_list.insert(0, ("", _("Any Availability Zone")))
+        return zone_list
+
+    @memoized.memoized_method
+    def populate_region_choices(self, request):
+        try:
+            regions = trove_api.trove.region_list(request)
+        except Exception:
+            regions = []
+            redirect = reverse('horizon:project:database_clusters:index')
+            exceptions.handle(request,
+                              _('Unable to retrieve region list.'),
+                              redirect=redirect)
+        available_regions = [(region, region) for region in regions]
+        if not available_regions:
+            available_regions.insert(0, ("", _("No regions found")))
+        elif len(available_regions) > 1:
+            available_regions.insert(0, ("", _("Default region")))
+        return available_regions
 
     @memoized.memoized_method
     def datastores(self, request):
@@ -255,10 +363,33 @@ class LaunchForm(forms.SelfHandlingForm):
                               _('Unable to obtain datastore versions.'),
                               redirect=redirect)
 
+    @memoized.memoized_method
+    def populate_config_choices(self, request, datastore, datastore_version):
+        try:
+            configs = trove_api.trove.configuration_list(request)
+            config_name = "%(name)s (%(datastore)s - %(version)s)"
+
+            choices = [(c.id,
+                        config_name % {'name': c.name,
+                                       'datastore': c.datastore_name,
+                                       'version': c.datastore_version_name})
+                       for c in configs
+                       if (c.datastore_name == datastore and
+                           c.datastore_version_name == datastore_version)]
+        except Exception:
+            choices = []
+
+        if choices:
+            choices.insert(0, ("", _("Select configuration")))
+        else:
+            choices.insert(0, ("", _("No configurations available")))
+        return choices
+
     def populate_datastore_choices(self, request):
         choices = ()
         datastores = self.filter_cluster_datastores(request)
         if datastores is not None:
+            datastore_flavor_fields = {}
             for ds in datastores:
                 versions = self.datastore_versions(request, ds.name)
                 if versions:
@@ -267,22 +398,92 @@ class LaunchForm(forms.SelfHandlingForm):
                     for v in versions:
                         if hasattr(v, 'active') and not v.active:
                             continue
-                        selection_text = ds.name + ' - ' + v.name
-                        widget_text = ds.name + '-' + v.name
+                        selection_text = utils.build_datastore_display_text(
+                            ds.name, v.name)
+                        widget_text = utils.build_widget_field_name(
+                            ds.name, v.name)
                         version_choices = (version_choices +
                                            ((widget_text, selection_text),))
+                        if db_capability.supports_configuration(ds.name):
+                            self._add_datastore_config_field(request, ds.name,
+                                                             v.name)
+                        k, v = self._add_datastore_flavor_field(request,
+                                                                ds.name,
+                                                                v.name)
+                        datastore_flavor_fields[k] = v
                         self._add_attr_to_optional_fields(ds.name,
                                                           widget_text)
 
                     choices = choices + version_choices
+            self._insert_datastore_version_fields(datastore_flavor_fields)
         return choices
 
+    def _add_datastore_flavor_field(self,
+                                    request,
+                                    datastore,
+                                    datastore_version):
+        name = utils.build_widget_field_name(datastore, datastore_version)
+        attr_key = 'data-datastore-' + name
+        field = forms.ChoiceField(
+            label=_("Flavor"),
+            help_text=_("Size of image to launch."),
+            required=False,
+            widget=forms.Select(attrs={
+                'class': 'switched',
+                'data-switch-on': 'datastore',
+                attr_key: _("Flavor")
+            }))
+        valid_flavors = self.datastore_flavors(request,
+                                               datastore,
+                                               datastore_version)
+        if valid_flavors:
+            field.choices = instance_utils.sort_flavor_list(
+                request, valid_flavors)
+
+        return name, field
+
+    def _add_datastore_config_field(self,
+                                    request,
+                                    datastore,
+                                    datastore_version):
+        name = utils.build_widget_field_name(datastore, datastore_version)
+        attr_key = 'data-datastore-' + name
+        field_name = utils.build_config_field_name(datastore,
+                                                   datastore_version)
+        self.fields[field_name] = forms.ChoiceField(
+            label=_("Configuration Group"),
+            required=False,
+            help_text=_("Select a configuration group"),
+            widget=forms.Select(attrs={
+                'class': 'switched',
+                'data-switch-on': 'datastore',
+                attr_key: _("Configuration Group")
+            }))
+        self.fields[field_name].choices = self.populate_config_choices(
+            request, datastore, datastore_version)
+
+    def _insert_datastore_version_fields(self, datastore_flavor_fields):
+        datastore_index = None
+        reordered_fields = self.fields.items()
+        for tup in reordered_fields:
+            if tup[0] == 'datastore':
+                datastore_index = reordered_fields.index(tup)
+                break
+
+        for k, v in datastore_flavor_fields.iteritems():
+            reordered_fields.insert(datastore_index + 1, (k, v))
+
+        self.fields.clear()
+        for tup in reordered_fields:
+            self.fields[tup[0]] = tup[1]
+
     def _add_attr_to_optional_fields(self, datastore, selection_text):
-        fields = []
         if db_capability.is_mongodb_datastore(datastore):
             fields = self.mongodb_fields
         elif db_capability.is_vertica_datastore(datastore):
             fields = self.vertica_fields
+        elif db_capability.is_oracle_rac_datastore(datastore):
+            fields = self.oracle_rac_fields
         else:
             fields = self.default_fields
 
@@ -298,35 +499,98 @@ class LaunchForm(forms.SelfHandlingForm):
             locality = data['locality']
         return locality
 
+    def _get_region(self, data):
+        region = None
+        if data.get('region'):
+            region = data['region']
+        return region
+
+    def _get_instance_type(self, data):
+        instance_type = None
+        if data.get('instance_type'):
+            instance_type = data['instance_type'].strip().split(",")
+        return instance_type
+
+    def _get_configuration(self, data, datastore, datastore_version):
+        configuration = None
+        config_field_name = utils.build_config_field_name(
+            datastore, datastore_version)
+        if data.get(config_field_name):
+            configuration = data[config_field_name]
+        return configuration
+
+    def _build_extended_properties(self, data, datastore):
+        extended_properties = None
+
+        if db_capability.is_oracle_rac_datastore(datastore):
+            extended_properties = {}
+            extended_properties['database'] = data['oracle_rac_database']
+            extended_properties['votedisk_mount'] = (
+                data['oracle_rac_votedisk_mount']
+            )
+            extended_properties['registry_mount'] = (
+                data['oracle_rac_registry_mount']
+            )
+            extended_properties['database_mount'] = (
+                data['oracle_rac_database_mount']
+            )
+            extended_properties['subnet'] = data['oracle_rac_subnet']
+            extended_properties['storage_type'] = (
+                data['oracle_rac_storage_type']
+            )
+
+        return extended_properties
+
     @sensitive_variables('data')
     def handle(self, request, data):
         try:
-            datastore, datastore_version = data['datastore'].split('-', 1)
+            avail_zone = data.get('availability_zone', None)
+            datastore, datastore_version = (
+                utils.parse_datastore_and_version_text(data['datastore']))
 
-            final_flavor = data['flavor']
+            flavor_field_name = utils.build_widget_field_name(
+                datastore, datastore_version)
+            flavor = data[flavor_field_name]
             num_instances = data['num_instances']
             root_password = None
             if db_capability.is_vertica_datastore(datastore):
-                final_flavor = data['vertica_flavor']
                 root_password = data['root_password']
                 num_instances = data['num_instances_vertica']
+            extended_properties = self._build_extended_properties(data,
+                                                                  datastore)
             LOG.info("Launching cluster with parameters "
                      "{name=%s, volume=%s, flavor=%s, "
-                     "datastore=%s, datastore_version=%s",
-                     "locality=%s",
-                     data['name'], data['volume'], final_flavor,
-                     datastore, datastore_version, self._get_locality(data))
+                     "datastore=%s, datastore_version=%s,"
+                     "locality=%s, AZ=%s, region=%s, instance_type=%s,"
+                     "configuration=%s",
+                     data['name'], data['volume'], flavor,
+                     datastore, datastore_version, self._get_locality(data),
+                     avail_zone, self._get_region(data),
+                     self._get_instance_type(data),
+                     self._get_configuration(data, datastore, datastore_version
+                                             ))
 
             trove_api.trove.cluster_create(request,
                                            data['name'],
                                            data['volume'],
-                                           final_flavor,
+                                           flavor,
                                            num_instances,
                                            datastore=datastore,
                                            datastore_version=datastore_version,
                                            nics=data['network'],
                                            root_password=root_password,
-                                           locality=self._get_locality(data))
+                                           locality=self._get_locality(data),
+                                           availability_zone=avail_zone,
+                                           region=self._get_region(data),
+                                           instance_type=(
+                                               self._get_instance_type(data)),
+                                           extended_properties=(
+                                               extended_properties),
+                                           configuration=(
+                                               self._get_configuration(
+                                                   data, datastore,
+                                                   datastore_version)
+                                           ))
             messages.success(request,
                              _('Launched cluster "%s"') % data['name'])
             return True
@@ -341,6 +605,9 @@ class ClusterAddInstanceForm(forms.SelfHandlingForm):
     cluster_id = forms.CharField(
         required=False,
         widget=forms.HiddenInput())
+    availability_zone = forms.ChoiceField(
+        label=_("Availability Zone"),
+        required=False)
     flavor = forms.ChoiceField(
         label=_("Flavor"),
         help_text=_("Size of image to launch."))
@@ -367,6 +634,9 @@ class ClusterAddInstanceForm(forms.SelfHandlingForm):
         label=_("Network"),
         help_text=_("Network attached to instance."),
         required=False)
+    region = forms.ChoiceField(
+        label=_("Region"),
+        required=False)
 
     def __init__(self, request, *args, **kwargs):
         super(ClusterAddInstanceForm, self).__init__(request, *args, **kwargs)
@@ -374,6 +644,11 @@ class ClusterAddInstanceForm(forms.SelfHandlingForm):
         self.fields['flavor'].choices = self.populate_flavor_choices(request)
         self.fields['network'].choices = self.populate_network_choices(
             request)
+        self.fields['availability_zone'].choices = (
+            self.populate_availability_zone_choices(request))
+        self.fields['region'].choices = self.populate_region_choices(request)
+        if not getattr(settings, 'DATABASE_ENABLE_REGION_SUPPORT', False):
+            self.fields['region'].widget = forms.HiddenInput()
 
     @memoized.memoized_method
     def flavors(self, request):
@@ -420,6 +695,43 @@ class ClusterAddInstanceForm(forms.SelfHandlingForm):
                               redirect=redirect)
         return network_list
 
+    @memoized.memoized_method
+    def populate_availability_zone_choices(self, request):
+        try:
+            zones = api.nova.availability_zone_list(request)
+        except Exception:
+            zones = []
+            redirect = reverse('horizon:project:database_clusters:index')
+            exceptions.handle(request,
+                              _('Unable to retrieve availability zones.'),
+                              redirect=redirect)
+
+        zone_list = [(zone.zoneName, zone.zoneName)
+                     for zone in zones if zone.zoneState['available']]
+        zone_list.sort()
+        if not zone_list:
+            zone_list.insert(0, ("", _("No availability zones found")))
+        elif len(zone_list) > 1:
+            zone_list.insert(0, ("", _("Any Availability Zone")))
+        return zone_list
+
+    @memoized.memoized_method
+    def populate_region_choices(self, request):
+        try:
+            regions = trove_api.trove.region_list(request)
+        except Exception:
+            regions = []
+            redirect = reverse('horizon:project:database_clusters:index')
+            exceptions.handle(request,
+                              _('Unable to retrieve region list.'),
+                              redirect=redirect)
+        available_regions = [(region, region) for region in regions]
+        if not available_regions:
+            available_regions.insert(0, ("", _("No regions found")))
+        elif len(available_regions) > 1:
+            available_regions.insert(0, ("", _("Default region")))
+        return available_regions
+
     def handle(self, request, data):
         try:
             flavor = trove_api.trove.flavor_get(request, data['flavor'])
@@ -431,7 +743,9 @@ class ClusterAddInstanceForm(forms.SelfHandlingForm):
                                  data['volume'],
                                  data.get('type', None),
                                  data.get('related_to', None),
-                                 data.get('network', None))
+                                 data.get('network', None),
+                                 data.get('availability_zone', None),
+                                 data.get('region', None))
         except Exception as e:
             redirect = reverse("horizon:project:database_clusters:index")
             exceptions.handle(request,

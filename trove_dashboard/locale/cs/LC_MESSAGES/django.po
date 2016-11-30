@@ -1,3 +1,4 @@
+# Andreas Jaeger <jaegerandi@gmail.com>, 2016. #zanata
 # Lenka Husáková <lenka.husakova@ultimum.io>, 2016. #zanata
 # Stanislav Ulrych <stanislav.ulrych@ultimum.io>, 2016. #zanata
 msgid ""

@@ -13,7 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import binascii
 import logging
 
 import django
@@ -34,6 +33,7 @@ from trove_dashboard.content.databases import forms
 from trove_dashboard.content.databases import tables
 from trove_dashboard.content.databases import views
 from trove_dashboard.content.databases.workflows import create_instance
+from trove_dashboard.content import utils
 from trove_dashboard.test import helpers as test
 
 INDEX_URL = reverse('horizon:project:databases:index')
@@ -42,8 +42,12 @@ DETAILS_URL = reverse('horizon:project:databases:detail', args=['id'])
 
 
 class DatabaseTests(test.TestCase):
-    @test.create_stubs(
-        {api.trove: ('instance_list', 'flavor_list')})
+    @test.create_stubs({
+        api.trove: ('datastore_version_list',
+                    'flavor_list',
+                    'instance_list'
+                    )
+    })
     def test_index(self):
         # Mock database instances
         databases = common.Paginated(self.databases.list())
@@ -52,6 +56,8 @@ class DatabaseTests(test.TestCase):
         # Mock flavors
         api.trove.flavor_list(IsA(http.HttpRequest))\
             .AndReturn(self.flavors.list())
+        api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str)).\
+            MultipleTimes().AndReturn(self.datastore_versions.list())
 
         self.mox.ReplayAll()
         res = self.client.get(INDEX_URL)
@@ -60,8 +66,12 @@ class DatabaseTests(test.TestCase):
         self.assertContains(res, '10.0.0.3')
         self.assertContains(res, 'trove.instance-2.com')
 
-    @test.create_stubs(
-        {api.trove: ('instance_list', 'flavor_list')})
+    @test.create_stubs({
+        api.trove: ('datastore_version_list',
+                    'flavor_list',
+                    'instance_list'
+                    )
+    })
     def test_index_flavor_exception(self):
         # Mock database instances
         databases = common.Paginated(self.databases.list())
@@ -70,6 +80,8 @@ class DatabaseTests(test.TestCase):
         # Mock flavors
         api.trove.flavor_list(IsA(http.HttpRequest))\
             .AndRaise(self.exceptions.trove)
+        api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str)).\
+            MultipleTimes().AndReturn(self.datastore_versions.list())
 
         self.mox.ReplayAll()
         res = self.client.get(INDEX_URL)
@@ -88,8 +100,12 @@ class DatabaseTests(test.TestCase):
         self.assertTemplateUsed(res, 'project/databases/index.html')
         self.assertMessageCount(res, error=1)
 
-    @test.create_stubs(
-        {api.trove: ('instance_list', 'flavor_list')})
+    @test.create_stubs({
+        api.trove: ('datastore_version_list',
+                    'flavor_list',
+                    'instance_list'
+                    )
+    })
     def test_index_pagination(self):
         # Mock database instances
         databases = self.databases.list()
@@ -100,6 +116,8 @@ class DatabaseTests(test.TestCase):
         # Mock flavors
         api.trove.flavor_list(IsA(http.HttpRequest))\
             .AndReturn(self.flavors.list())
+        api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str)).\
+            MultipleTimes().AndReturn(self.datastore_versions.list())
 
         self.mox.ReplayAll()
         res = self.client.get(INDEX_URL)
@@ -107,8 +125,12 @@ class DatabaseTests(test.TestCase):
         self.assertContains(
             res, 'marker=' + last_record.id)
 
-    @test.create_stubs(
-        {api.trove: ('instance_list', 'flavor_list')})
+    @test.create_stubs({
+        api.trove: ('datastore_version_list',
+                    'flavor_list',
+                    'instance_list'
+                    )
+    })
     def test_index_flavor_list_exception(self):
         # Mocking instances.
         databases = common.Paginated(self.databases.list())
@@ -120,6 +142,8 @@ class DatabaseTests(test.TestCase):
         api.trove.flavor_list(
             IsA(http.HttpRequest),
         ).AndRaise(self.exceptions.trove)
+        api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str)).\
+            MultipleTimes().AndReturn(self.datastore_versions.list())
 
         self.mox.ReplayAll()
 
@@ -130,8 +154,10 @@ class DatabaseTests(test.TestCase):
 
     @test.create_stubs({
         api.trove: ('backup_list', 'configuration_list', 'datastore_flavors',
-                    'datastore_list', 'datastore_version_list', 'flavor_list',
-                    'instance_list'),
+                    'datastore_list', 'datastore_version_list',
+                    'datastore_volume_types', 'instance_list_all',
+                    'region_list',
+                    ),
         dash_api.cinder: ('volume_type_list',),
         dash_api.neutron: ('network_list',),
         dash_api.nova: ('availability_zone_list',),
@@ -143,19 +169,22 @@ class DatabaseTests(test.TestCase):
                                     IsA(six.string_types),
                                     IsA(six.string_types)).\
             MultipleTimes().AndReturn(self.flavors.list())
+        api.trove.datastore_volume_types(IsA(http.HttpRequest),
+                                         IsA(six.string_types),
+                                         IsA(six.string_types)). \
+            MultipleTimes().AndReturn(self.database_volume_types.list())
         api.trove.backup_list(IsA(http.HttpRequest)).AndReturn(
             self.database_backups.list())
         api.trove.configuration_list(IsA(http.HttpRequest)).AndReturn([])
-        api.trove.instance_list(IsA(http.HttpRequest)).AndReturn(
-            self.databases.list())
         # Mock datastores
         api.trove.datastore_list(IsA(http.HttpRequest)).AndReturn(
             self.datastores.list())
         # Mock datastore versions
         api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str)).\
             MultipleTimes().AndReturn(self.datastore_versions.list())
-
-        dash_api.cinder.volume_type_list(IsA(http.HttpRequest)).AndReturn([])
+        (api.trove.instance_list_all(IsA(http.HttpRequest))
+            .AndReturn(self.databases.list()))
+        api.trove.region_list(IsA(http.HttpRequest)).AndReturn([])
 
         dash_api.neutron.network_list(IsA(http.HttpRequest),
                                       tenant_id=self.tenant.id,
@@ -206,8 +235,11 @@ class DatabaseTests(test.TestCase):
 
     @test.create_stubs({
         api.trove: ('backup_list', 'configuration_list', 'datastore_flavors',
-                    'datastore_list', 'datastore_version_list', 'flavor_list',
-                    'instance_create', 'instance_list'),
+                    'datastore_list', 'datastore_version_list',
+                    'datastore_volume_types', 'instance_create',
+                    'instance_get', 'instance_list_all',
+                    'region_list',
+                    ),
         dash_api.cinder: ('volume_type_list',),
         dash_api.neutron: ('network_list',),
         dash_api.nova: ('availability_zone_list',),
@@ -219,12 +251,15 @@ class DatabaseTests(test.TestCase):
                                     IsA(six.string_types),
                                     IsA(six.string_types)).\
             MultipleTimes().AndReturn(self.flavors.list())
-
+        api.trove.datastore_volume_types(IsA(http.HttpRequest),
+                                         IsA(six.string_types),
+                                         IsA(six.string_types)). \
+            MultipleTimes().AndReturn(self.database_volume_types.list())
         api.trove.backup_list(IsA(http.HttpRequest)).AndReturn(
             self.database_backups.list())
-
-        api.trove.instance_list(IsA(http.HttpRequest)).AndReturn(
-            self.databases.list())
+        (api.trove.configuration_list(IsA(http.HttpRequest)))
+        (api.trove.instance_list_all(IsA(http.HttpRequest))
+            .AndReturn(self.databases.list()))
 
         # Mock datastores
         api.trove.datastore_list(IsA(http.HttpRequest))\
@@ -234,7 +269,7 @@ class DatabaseTests(test.TestCase):
         api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str))\
             .MultipleTimes().AndReturn(self.datastore_versions.list())
 
-        dash_api.cinder.volume_type_list(IsA(http.HttpRequest)).AndReturn([])
+        api.trove.region_list(IsA(http.HttpRequest)).AndReturn([])
 
         dash_api.neutron.network_list(IsA(http.HttpRequest),
                                       tenant_id=self.tenant.id,
@@ -247,20 +282,20 @@ class DatabaseTests(test.TestCase):
 
         nics = [{"net-id": self.networks.first().id, "v4-fixed-ip": ''}]
 
-        datastore = 'mysql'
-        datastore_version = '5.5'
-        field_name = self._build_flavor_widget_name(datastore,
-                                                    datastore_version)
         dash_api.nova.availability_zone_list(IsA(http.HttpRequest)) \
             .AndReturn(self.availability_zones.list())
 
+        datastore = 'mysql'
+        datastore_version = '5.5'
+        field_name = utils.build_widget_field_name(datastore,
+                                                   datastore_version)
         # Actual create database call
         api.trove.instance_create(
             IsA(http.HttpRequest),
             IsA(six.text_type),
             IsA(int),
             IsA(six.text_type),
-            databases=None,
+            databases=[],
             datastore=datastore,
             datastore_version=datastore_version,
             restore_point=None,
@@ -271,7 +306,8 @@ class DatabaseTests(test.TestCase):
             replica_count=None,
             volume_type=None,
             locality=None,
-            availability_zone=IsA(six.text_type)
+            availability_zone=IsA(six.text_type),
+            region_name=None
         ).AndReturn(self.databases.first())
 
         self.mox.ReplayAll()
@@ -280,9 +316,9 @@ class DatabaseTests(test.TestCase):
             'volume': '1',
             'flavor': 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
             'datastore': field_name,
-            field_name: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            'flavor-' + field_name: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
             'network': self.networks.first().id,
-            'volume_type': 'no_type'
+            'volume_type': 'no_type',
         }
 
         res = self.client.post(LAUNCH_URL, post)
@@ -290,8 +326,11 @@ class DatabaseTests(test.TestCase):
 
     @test.create_stubs({
         api.trove: ('backup_list', 'configuration_list', 'datastore_flavors',
-                    'datastore_list', 'datastore_version_list', 'flavor_list',
-                    'instance_create', 'instance_list'),
+                    'datastore_list', 'datastore_version_list',
+                    'datastore_volume_types', 'instance_create',
+                    'instance_get', 'instance_list_all',
+                    'region_list',
+                    ),
         dash_api.cinder: ('volume_type_list',),
         dash_api.neutron: ('network_list',),
         dash_api.nova: ('availability_zone_list',),
@@ -304,12 +343,15 @@ class DatabaseTests(test.TestCase):
                                     IsA(six.string_types),
                                     IsA(six.string_types)).\
             MultipleTimes().AndReturn(self.flavors.list())
-
+        api.trove.datastore_volume_types(IsA(http.HttpRequest),
+                                         IsA(six.string_types),
+                                         IsA(six.string_types)). \
+            MultipleTimes().AndReturn(self.database_volume_types.list())
         api.trove.backup_list(IsA(http.HttpRequest)).AndReturn(
             self.database_backups.list())
-
-        api.trove.instance_list(IsA(http.HttpRequest)).AndReturn(
-            self.databases.list())
+        api.trove.configuration_list(IsA(http.HttpRequest))
+        (api.trove.instance_list_all(IsA(http.HttpRequest))
+            .AndReturn(self.databases.list()))
 
         # Mock datastores
         api.trove.datastore_list(IsA(http.HttpRequest))\
@@ -319,7 +361,7 @@ class DatabaseTests(test.TestCase):
         api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str))\
             .MultipleTimes().AndReturn(self.datastore_versions.list())
 
-        dash_api.cinder.volume_type_list(IsA(http.HttpRequest)).AndReturn([])
+        api.trove.region_list(IsA(http.HttpRequest)).AndReturn([])
 
         dash_api.neutron.network_list(IsA(http.HttpRequest),
                                       tenant_id=self.tenant.id,
@@ -332,20 +374,20 @@ class DatabaseTests(test.TestCase):
 
         nics = [{"net-id": self.networks.first().id, "v4-fixed-ip": ''}]
 
-        datastore = 'mysql'
-        datastore_version = '5.5'
-        field_name = self._build_flavor_widget_name(datastore,
-                                                    datastore_version)
         dash_api.nova.availability_zone_list(IsA(http.HttpRequest)) \
             .AndReturn(self.availability_zones.list())
 
+        datastore = 'mysql'
+        datastore_version = '5.5'
+        field_name = utils.build_widget_field_name(datastore,
+                                                   datastore_version)
         # Actual create database call
         api.trove.instance_create(
             IsA(http.HttpRequest),
             IsA(six.text_type),
             IsA(int),
             IsA(six.text_type),
-            databases=None,
+            databases=[],
             datastore=datastore,
             datastore_version=datastore_version,
             restore_point=None,
@@ -356,7 +398,8 @@ class DatabaseTests(test.TestCase):
             replica_count=None,
             volume_type=None,
             locality=None,
-            availability_zone=IsA(six.text_type)
+            availability_zone=IsA(six.text_type),
+            region_name=None
         ).AndRaise(trove_exception)
 
         self.mox.ReplayAll()
@@ -365,7 +408,7 @@ class DatabaseTests(test.TestCase):
             'volume': '1',
             'flavor': 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
             'datastore': field_name,
-            field_name: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            'flavor-' + field_name: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
             'network': self.networks.first().id,
             'volume_type': 'no_type'
         }
@@ -374,9 +417,12 @@ class DatabaseTests(test.TestCase):
         self.assertRedirectsNoFollow(res, INDEX_URL)
 
     @test.create_stubs({
-        api.trove: ('instance_get', 'flavor_get', 'root_show')
+        api.trove: ('datastore_version_list', 'flavor_get', 'instance_get',
+                    'root_show')
     })
     def _test_details(self, database, test_text, assert_contains=True):
+        (api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str))
+            .MultipleTimes().AndReturn(self.datastore_versions.list()))
         api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))\
             .AndReturn(database)
         api.trove.flavor_get(IsA(http.HttpRequest), IsA(str))\
@@ -389,7 +435,7 @@ class DatabaseTests(test.TestCase):
         # Suppress expected log messages in the test output
         loggers = []
         toSuppress = ["trove_dashboard.content.databases.tabs",
-                      "horizon.tables"]
+                      "horizon.tables", ]
         for cls in toSuppress:
             logger = logging.getLogger(cls)
             loggers.append((logger, logger.getEffectiveLevel()))
@@ -423,16 +469,22 @@ class DatabaseTests(test.TestCase):
         database = self.databases.first()
         self._test_details(database, "Locality")
 
+    @test.create_stubs({api.trove: ('instance_get',)})
     def test_create_database(self):
         database = self.databases.first()
+
+        api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))\
+            .AndReturn(database)
+        self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_database',
                       args=[database.id])
         res = self.client.get(url)
         self.assertTemplateUsed(res, 'project/databases/create_database.html')
 
-    @test.create_stubs({api.trove: ('database_create',)})
+    @test.create_stubs({api.trove: ('database_create', 'instance_get',)})
     def test_create_new_database(self):
+        database = self.databases.first()
         new_database = {
             "status": "ACTIVE",
             "updated": "2013-08-12T22:00:09",
@@ -460,6 +512,8 @@ class DatabaseTests(test.TestCase):
         api.trove.database_create(
             IsA(http.HttpRequest), u'id', u'NewDB', character_set=u'',
             collation=u'').AndReturn(new_database)
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))
+            .AndReturn(database))
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_database',
@@ -473,11 +527,15 @@ class DatabaseTests(test.TestCase):
         self.assertNoFormErrors(res)
         self.assertMessageCount(success=1)
 
-    @test.create_stubs({api.trove: ('database_create',)})
+    @test.create_stubs({api.trove: ('database_create', 'instance_get')})
     def test_create_new_database_exception(self):
+        database = self.databases.first()
+
         api.trove.database_create(
             IsA(http.HttpRequest), u'id', u'NewDB', character_set=u'',
             collation=u'').AndRaise(self.exceptions.trove)
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))
+            .AndReturn(database))
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_database',
@@ -489,6 +547,38 @@ class DatabaseTests(test.TestCase):
 
         res = self.client.post(url, post)
         self.assertEqual(res.status_code, 302)
+
+    @test.create_stubs({api.trove: ('instance_get',)})
+    def test_create_new_database_optional_fields_mysql(self):
+        database = self.databases.first()
+
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))
+            .AndReturn(database))
+        self.mox.ReplayAll()
+
+        url = reverse('horizon:project:databases:create_database',
+                      args=['id'])
+        res = self.client.get(url)
+        character_set_field = res.context_data['form'].fields['character_set']
+        collation_field = res.context_data['form'].fields['collation']
+        self.assertFalse(character_set_field.widget.is_hidden)
+        self.assertFalse(collation_field.widget.is_hidden)
+
+    @test.create_stubs({api.trove: ('instance_get',)})
+    def test_create_new_database_optional_fields_not_mysql(self):
+        database = self.databases.list()[3]
+
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(unicode))
+            .AndReturn(database))
+        self.mox.ReplayAll()
+
+        url = reverse('horizon:project:databases:create_database',
+                      args=['id'])
+        res = self.client.get(url)
+        character_set_field = res.context_data['form'].fields['character_set']
+        collation_field = res.context_data['form'].fields['collation']
+        self.assertTrue(character_set_field.widget.is_hidden)
+        self.assertTrue(collation_field.widget.is_hidden)
 
     @test.create_stubs({api.trove: ('instance_get', 'root_show')})
     def test_show_root(self):
@@ -624,9 +714,10 @@ class DatabaseTests(test.TestCase):
         self.assertEqual(table.data[0].enabled, True)
         self.assertEqual(table.data[0].password, "password")
 
-    @test.create_stubs(
-        {api.trove: ('instance_get', 'flavor_get', 'users_list',
-                     'user_list_access', 'user_delete')})
+    @test.create_stubs({
+        api.trove: ('instance_get', 'flavor_get', 'user_delete', 'users_list',
+                    'user_list_access')
+    })
     def test_user_delete(self):
         database = self.databases.first()
         user = self.database_users.first()
@@ -644,15 +735,16 @@ class DatabaseTests(test.TestCase):
 
         # tabs.py: UserTab.get_user_data
         api.trove.users_list(IsA(http.HttpRequest),
-                             database_id).AndReturn([user])
+                             IsA(str)).AndReturn([user])
         api.trove.user_list_access(IsA(http.HttpRequest),
-                                   database_id,
-                                   user_id).AndReturn([user_db])
+                                   IsA(str),
+                                   IsA(str),
+                                   host=IsA(str)).AndReturn([user_db])
 
         # tables.py: DeleteUser.delete
         api.trove.user_delete(IsA(http.HttpRequest),
-                              database_id,
-                              user_id).AndReturn(None)
+                              IsA(six.text_type),
+                              IsA(six.text_type)).AndReturn(None)
 
         self.mox.ReplayAll()
 
@@ -664,15 +756,24 @@ class DatabaseTests(test.TestCase):
         res = self.client.post(url, form_data)
         self.assertRedirectsNoFollow(res, url)
 
+    @test.create_stubs({
+        api.trove: ('instance_get',)
+    })
     def test_create_user(self):
+        database = self.databases.first()
         user = self.users.first()
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))
+            .AndReturn(database))
+        self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_user',
                       args=[user.id])
         res = self.client.get(url)
         self.assertTemplateUsed(res, 'project/databases/create_user.html')
 
-    @test.create_stubs({api.trove: ('user_create',)})
+    @test.create_stubs({
+        api.trove: ('instance_get', 'user_create',)
+    })
     def test_create_new_user(self):
         database = self.databases.first()
         user = self.users.first()
@@ -681,11 +782,15 @@ class DatabaseTests(test.TestCase):
             "name": "Test_User2",
             "host": "%",
             "databases": ["TestDB"],
+            "roles": []
         }
 
-        api.trove.user_create(
-            IsA(http.HttpRequest), database.id, user.name, u'password',
-            host=u'', databases=[]).AndReturn(new_user)
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))
+            .AndReturn(database))
+        (api.trove.user_create(IsA(http.HttpRequest), IsA(six.text_type),
+                               IsA(six.text_type), IsA(six.text_type),
+                               host=u'', databases=[], roles=None)
+            .AndReturn(new_user))
 
         self.mox.ReplayAll()
 
@@ -701,12 +806,17 @@ class DatabaseTests(test.TestCase):
         self.assertNoFormErrors(res)
         self.assertMessageCount(success=1)
 
-    @test.create_stubs({api.trove: ('user_create',)})
+    @test.create_stubs({
+        api.trove: ('instance_get', 'user_create',)
+    })
     def test_create_new_user_exception(self):
-        api.trove.user_create(
-            IsA(http.HttpRequest), u'id', u'name', u'password',
-            host=u'', databases=[]).AndRaise(self.exceptions.trove)
-
+        database = self.databases.first()
+        (api.trove.instance_get(IsA(http.HttpRequest), IsA(six.text_type))
+            .AndReturn(database))
+        (api.trove.user_create(IsA(http.HttpRequest), IsA(six.text_type),
+                               IsA(six.text_type), IsA(six.text_type),
+                               host=u'', databases=[], roles=None)
+            .AndRaise(self.exceptions.trove))
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:create_user',
@@ -726,18 +836,19 @@ class DatabaseTests(test.TestCase):
         user = self.users.first()
 
         api.trove.user_update_attributes(
-            IsA(http.HttpRequest), database.id, user.name, host=u'',
-            new_name=u'new_name', new_password=u'new_password',
-            new_host=u'127.0.0.1')
+            IsA(http.HttpRequest), IsA(six.text_type), IsA(six.text_type),
+            host=IsA(six.text_type), new_name=IsA(six.text_type),
+            new_password=IsA(six.text_type), new_host=IsA(six.text_type))
 
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:edit_user',
-                      args=[database.id, user.name])
+                      args=[database.id, user.name, '%'])
         post = {
             'method': 'EditUserForm',
             'instance_id': database.id,
             'user_name': user.name,
+            'user_host': '%',
             'new_name': 'new_name',
             'new_password': 'new_password',
             'new_host': '127.0.0.1'}
@@ -752,19 +863,19 @@ class DatabaseTests(test.TestCase):
         user = self.users.first()
 
         api.trove.user_update_attributes(
-            IsA(http.HttpRequest), database.id, user.name, host=u'',
-            new_name=u'new_name', new_password=u'new_password',
-            new_host=u'127.0.0.1') \
-            .AndRaise(self.exceptions.trove)
+            IsA(http.HttpRequest), IsA(six.text_type), IsA(six.text_type),
+            host=IsA(six.text_type), new_name=IsA(six.text_type),
+            new_password=IsA(six.text_type), new_host=IsA(six.text_type))
 
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:edit_user',
-                      args=[database.id, user.name])
+                      args=[database.id, user.name, '%'])
         post = {
             'method': 'EditUserForm',
             'instance_id': database.id,
             'user_name': user.name,
+            'user_host': '%',
             'new_name': 'new_name',
             'new_password': 'new_password',
             'new_host': '127.0.0.1'}
@@ -777,60 +888,67 @@ class DatabaseTests(test.TestCase):
         user = self.users.first()
 
         url = reverse('horizon:project:databases:edit_user',
-                      args=[database.id, user.name])
+                      args=[database.id, user.name, '%'])
         post = {
             'method': 'EditUserForm',
             'instance_id': database.id,
-            'user_name': user.name}
+            'user_name': user.name,
+            'user_host': '%',
+        }
         res = self.client.post(url, post)
 
         msg = forms.EditUserForm.validation_error_message
         self.assertFormError(res, "form", None, [msg])
 
-    @test.create_stubs({api.trove: ('database_list', 'user_list_access')})
+    @test.create_stubs({api.trove: ('database_list', 'user_show_access')})
     def test_access_detail_get(self):
-        api.trove.database_list(IsA(http.HttpRequest), u'id') \
+        api.trove.database_list(IsA(http.HttpRequest), IsA(six.text_type)) \
             .AndReturn(self.databases.list())
 
-        api.trove.user_list_access(IsA(http.HttpRequest), u'id', u'name') \
+        api.trove.user_show_access(IsA(http.HttpRequest), IsA(six.text_type),
+                                   IsA(six.text_type),
+                                   host=IsA(six.text_type)) \
             .AndReturn(self.databases.list())
 
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:access_detail',
-                      args=['id', 'name'])
+                      args=['id', 'name', 'host'])
         res = self.client.get(url)
         self.assertTemplateUsed(
             res, 'project/databases/access_detail.html')
 
-    @test.create_stubs({api.trove: ('database_list', 'user_list_access')})
+    @test.create_stubs({api.trove: ('database_list', 'user_show_access')})
     def test_access_detail_get_exception(self):
-        api.trove.database_list(IsA(http.HttpRequest), u'id') \
+        api.trove.database_list(IsA(http.HttpRequest), IsA(six.text_type)) \
             .AndReturn(self.databases.list())
 
-        api.trove.user_list_access(IsA(http.HttpRequest), u'id', u'name') \
+        api.trove.user_show_access(IsA(http.HttpRequest), IsA(six.text_type),
+                                   IsA(six.text_type),
+                                   host=IsA(six.text_type)) \
             .AndRaise(self.exceptions.trove)
 
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:access_detail',
-                      args=['id', 'name'])
+                      args=['id', 'name', 'host'])
         res = self.client.get(url)
         self.assertRedirectsNoFollow(res, DETAILS_URL)
 
     @test.create_stubs({api.trove: ('user_grant_access',)})
     def test_detail_grant_access(self):
         api.trove.user_grant_access(
-            IsA(http.HttpRequest), u'id', u'name', [u'db1'], None)
+            IsA(http.HttpRequest), IsA(six.text_type), IsA(six.text_type),
+            [IsA(six.text_type)], host=IsA(six.text_type))
 
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:access_detail',
-                      args=['id', 'name'])
+                      args=['id', 'name', 'host'])
         form_data = {"action": "access__grant_access__%s" % 'db1'}
         req = self.factory.post(url, form_data)
 
-        kwargs = {'instance_id': 'id', 'user_name': 'name'}
+        kwargs = {'instance_id': 'id', 'user_name': 'name', 'user_host': '%'}
 
         db_access_list = []
         db_access = views.DBAccess('db1', False)
@@ -845,17 +963,18 @@ class DatabaseTests(test.TestCase):
     @test.create_stubs({api.trove: ('user_grant_access',)})
     def test_detail_grant_access_exception(self):
         api.trove.user_grant_access(
-            IsA(http.HttpRequest), u'id', u'name', [u'db1'], None) \
+            IsA(http.HttpRequest), IsA(six.text_type), IsA(six.text_type),
+            [IsA(six.text_type)], host=IsA(six.text_type)) \
             .AndRaise(self.exceptions.trove)
 
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:access_detail',
-                      args=['id', 'name'])
+                      args=['id', 'name', 'host'])
         form_data = {"action": "access__grant_access__%s" % 'db1'}
         req = self.factory.post(url, form_data)
 
-        kwargs = {'instance_id': 'id', 'user_name': 'name'}
+        kwargs = {'instance_id': 'id', 'user_name': 'name', 'user_host': '%'}
 
         db_access_list = []
         db_access = views.DBAccess('db1', False)
@@ -869,17 +988,18 @@ class DatabaseTests(test.TestCase):
 
     @test.create_stubs({api.trove: ('user_revoke_access',)})
     def test_detail_revoke_access(self):
-
         api.trove.user_revoke_access(
-            IsA(http.HttpRequest), u'id', u'name', u'db1', None)
+            IsA(http.HttpRequest), IsA(six.text_type), IsA(six.text_type),
+            [IsA(six.text_type)], host=IsA(six.text_type))
+
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:access_detail',
-                      args=['id', 'name'])
+                      args=['id', 'name', 'host'])
         form_data = {"action": "access__revoke_access__%s" % 'db1'}
         req = self.factory.post(url, form_data)
 
-        kwargs = {'instance_id': 'id', 'user_name': 'name'}
+        kwargs = {'instance_id': 'id', 'user_name': 'name', 'user_host': '%'}
 
         db_access_list = []
         db_access = views.DBAccess('db1', True)
@@ -893,18 +1013,19 @@ class DatabaseTests(test.TestCase):
 
     @test.create_stubs({api.trove: ('user_revoke_access',)})
     def test_detail_revoke_access_exception(self):
-
         api.trove.user_revoke_access(
-            IsA(http.HttpRequest), u'id', u'name', u'db1', None) \
+            IsA(http.HttpRequest), IsA(six.text_type), IsA(six.text_type),
+            [IsA(six.text_type)], host=IsA(six.text_type)) \
             .AndRaise(self.exceptions.trove)
+
         self.mox.ReplayAll()
 
         url = reverse('horizon:project:databases:access_detail',
-                      args=['id', 'name'])
+                      args=['id', 'name', 'host'])
         form_data = {"action": "access__revoke_access__%s" % 'db1'}
         req = self.factory.post(url, form_data)
 
-        kwargs = {'instance_id': 'id', 'user_name': 'name'}
+        kwargs = {'instance_id': 'id', 'user_name': 'name', 'user_host': '%'}
 
         db_access_list = []
         db_access = views.DBAccess('db1', True)
@@ -1026,8 +1147,11 @@ class DatabaseTests(test.TestCase):
 
     @test.create_stubs({
         api.trove: ('backup_list', 'configuration_list', 'datastore_flavors',
-                    'datastore_list', 'datastore_version_list', 'flavor_list',
-                    'instance_create', 'instance_get', 'instance_list_all'),
+                    'datastore_list', 'datastore_version_list',
+                    'datastore_volume_types', 'instance_create',
+                    'instance_get', 'instance_list_all',
+                    'region_list',
+                    ),
         dash_api.cinder: ('volume_type_list',),
         dash_api.neutron: ('network_list',),
         dash_api.nova: ('availability_zone_list',),
@@ -1039,10 +1163,13 @@ class DatabaseTests(test.TestCase):
                                     IsA(six.string_types),
                                     IsA(six.string_types)).\
             MultipleTimes().AndReturn(self.flavors.list())
-
+        api.trove.datastore_volume_types(IsA(http.HttpRequest),
+                                         IsA(six.string_types),
+                                         IsA(six.string_types)).\
+            MultipleTimes().AndReturn(self.database_volume_types.list())
         api.trove.backup_list(IsA(http.HttpRequest)).AndReturn(
             self.database_backups.list())
-
+        api.trove.configuration_list(IsA(http.HttpRequest))
         api.trove.instance_list_all(IsA(http.HttpRequest)).AndReturn(
             self.databases.list())
 
@@ -1053,7 +1180,7 @@ class DatabaseTests(test.TestCase):
                                          IsA(str))\
             .MultipleTimes().AndReturn(self.datastore_versions.list())
 
-        dash_api.cinder.volume_type_list(IsA(http.HttpRequest)).AndReturn([])
+        api.trove.region_list(IsA(http.HttpRequest)).AndReturn([])
 
         dash_api.neutron.network_list(IsA(http.HttpRequest),
                                       tenant_id=self.tenant.id,
@@ -1074,15 +1201,15 @@ class DatabaseTests(test.TestCase):
 
         datastore = 'mysql'
         datastore_version = '5.5'
-        field_name = self._build_flavor_widget_name(datastore,
-                                                    datastore_version)
+        field_name = utils.build_widget_field_name(datastore,
+                                                   datastore_version)
         # Actual create database call
         api.trove.instance_create(
             IsA(http.HttpRequest),
             IsA(six.text_type),
             IsA(int),
             IsA(six.text_type),
-            databases=None,
+            databases=[],
             datastore=datastore,
             datastore_version=datastore_version,
             restore_point=None,
@@ -1093,7 +1220,8 @@ class DatabaseTests(test.TestCase):
             replica_count=2,
             volume_type=None,
             locality=None,
-            availability_zone=IsA(six.text_type)
+            availability_zone=IsA(six.text_type),
+            region_name=None
         ).AndReturn(self.databases.first())
 
         self.mox.ReplayAll()
@@ -1102,7 +1230,7 @@ class DatabaseTests(test.TestCase):
             'volume': '1',
             'flavor': 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
             'datastore': field_name,
-            field_name: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            'flavor-' + field_name: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
             'network': self.networks.first().id,
             'initial_state': 'master',
             'master': self.databases.first().id,
@@ -1165,8 +1293,7 @@ class DatabaseTests(test.TestCase):
         self.assertRedirectsNoFollow(res, INDEX_URL)
 
     @test.create_stubs({
-        api.trove: ('flavor_list', 'instance_list',
-                    'eject_replica_source',),
+        api.trove: ('eject_replica_source', 'flavor_list', 'instance_list',),
     })
     def test_eject_replica_source(self):
         databases = common.Paginated(self.databases.list())
@@ -1174,12 +1301,11 @@ class DatabaseTests(test.TestCase):
 
         api.trove.eject_replica_source(
             IsA(http.HttpRequest), database.id)
-
+        (api.trove.flavor_list(IsA(http.HttpRequest))
+            .AndReturn(self.flavors.list()))
         databases = common.Paginated(self.databases.list())
         api.trove.instance_list(IsA(http.HttpRequest), marker=None)\
             .AndReturn(databases)
-        api.trove.flavor_list(IsA(http.HttpRequest))\
-            .AndReturn(self.flavors.list())
 
         self.mox.ReplayAll()
 
@@ -1190,8 +1316,7 @@ class DatabaseTests(test.TestCase):
         self.assertRedirectsNoFollow(res, INDEX_URL)
 
     @test.create_stubs({
-        api.trove: ('flavor_list', 'instance_list',
-                    'eject_replica_source',),
+        api.trove: ('eject_replica_source', 'flavor_list', 'instance_list',),
     })
     def test_eject_replica_source_exception(self):
         databases = common.Paginated(self.databases.list())
@@ -1200,12 +1325,11 @@ class DatabaseTests(test.TestCase):
         api.trove.eject_replica_source(
             IsA(http.HttpRequest), database.id)\
             .AndRaise(self.exceptions.trove)
-
+        (api.trove.flavor_list(IsA(http.HttpRequest))
+            .AndReturn(self.flavors.list()))
         databases = common.Paginated(self.databases.list())
         api.trove.instance_list(IsA(http.HttpRequest), marker=None)\
             .AndReturn(databases)
-        api.trove.flavor_list(IsA(http.HttpRequest))\
-            .AndReturn(self.flavors.list())
 
         self.mox.ReplayAll()
 
@@ -1214,34 +1338,6 @@ class DatabaseTests(test.TestCase):
             {'action': 'databases__eject_replica_source__%s' % database.id})
 
         self.assertRedirectsNoFollow(res, INDEX_URL)
-
-    @test.create_stubs({
-        api.trove: ('instance_list',)
-    })
-    def test_master_list_pagination(self):
-        request = http.HttpRequest()
-
-        first_part = common.Paginated(items=self.databases.list()[:1],
-                                      next_marker='marker')
-        second_part = common.Paginated(items=self.databases.list()[1:])
-
-        api.trove.instance_list(request).AndReturn(first_part)
-        (api.trove.instance_list(request, marker='marker')
-         .AndReturn(second_part))
-        api.trove.instance_list(request).AndReturn(first_part)
-
-        self.mox.ReplayAll()
-
-        advanced_page = create_instance.AdvancedAction(request, None)
-        choices = advanced_page.populate_master_choices(request, None)
-        self.assertTrue(len(choices) == len(self.databases.list()) + 1)
-
-    def _build_datastore_display_text(self, datastore, datastore_version):
-        return datastore + ' - ' + datastore_version
-
-    def _build_flavor_widget_name(self, datastore, datastore_version):
-        return binascii.hexlify(self._build_datastore_display_text(
-            datastore, datastore_version))
 
     @test.create_stubs({
         api.trove: ('instance_get',
@@ -1356,3 +1452,73 @@ class DatabaseTests(test.TestCase):
             {'action': 'databases__detach_configuration__%s' % database.id})
 
         self.assertRedirectsNoFollow(res, INDEX_URL)
+
+    @test.create_stubs({
+        api.trove: ('backup_list', 'instance_list', 'region_list',)
+    })
+    def test_master_list_pagination(self):
+        request = http.HttpRequest()
+
+        first_part = common.Paginated(self.databases.list()[:1],
+                                      next_marker='marker')
+        second_part = common.Paginated(self.databases.list()[1:])
+
+        api.trove.backup_list(IsA(http.HttpRequest)).AndReturn([])
+        (api.trove.instance_list(IsA(http.HttpRequest),
+                                 include_clustered=False)
+            .AndReturn(first_part))
+        (api.trove.instance_list(IsA(http.HttpRequest),
+                                 marker='marker',
+                                 include_clustered=False)
+            .AndReturn(second_part))
+        api.trove.region_list(request).AndReturn([])
+
+        self.mox.ReplayAll()
+
+        advanced_page = create_instance.AdvancedAction(request, None)
+        choices = advanced_page.fields['master'].choices
+        self.assertTrue(len(choices) == len(self.databases.list()))
+
+    @test.create_stubs({
+        api.trove: ('flavor_list', 'instance_list')
+    })
+    def test_force_delete_reset_build_status(self):
+        instance_list = []
+        for database in self.databases.list():
+            if database.status == "BUILD":
+                instance_list.append(database)
+                break
+        databases = common.Paginated(instance_list)
+        (api.trove.instance_list(IsA(http.HttpRequest), marker=None)
+            .AndReturn(databases))
+        (api.trove.flavor_list(IsA(http.HttpRequest))
+            .AndReturn(self.flavors.list()))
+        self.mox.ReplayAll()
+
+        res = self.client.get(INDEX_URL)
+        self.assertContains(res, 'Force Delete Instance')
+        # Disabling it until policy support is added
+        # self.assertContains(res, 'Reset Status')
+
+    @test.create_stubs({
+        api.trove: ('datastore_version_list', 'flavor_list', 'instance_list')
+    })
+    def test_force_delete_reset_active_status(self):
+        instance_list = []
+        for database in self.databases.list():
+            if database.status != "BUILD":
+                instance_list.append(database)
+                break
+        databases = common.Paginated(instance_list)
+        (api.trove.instance_list(IsA(http.HttpRequest), marker=None)
+            .AndReturn(databases))
+        (api.trove.flavor_list(IsA(http.HttpRequest))
+            .AndReturn(self.flavors.list()))
+        (api.trove.datastore_version_list(IsA(http.HttpRequest), IsA(str))
+            .MultipleTimes().AndReturn(self.datastore_versions.list()))
+        self.mox.ReplayAll()
+
+        res = self.client.get(INDEX_URL)
+        self.assertContains(res, 'Force Delete Instance')
+        # Disabling it until policy support is added
+        # self.assertContains(res, 'Reset Status')

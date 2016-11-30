@@ -16,7 +16,8 @@
 # pip install {opts} {packages}
 
 ZUUL_CLONER=/usr/zuul-env/bin/zuul-cloner
-BRANCH_NAME=master
+BRANCH_NAME=${BRANCH_NAME:-master}
+BRANCH_NAME=${ZUUL_BRANCH:-$BRANCH_NAME}
 horizon_installed=$(echo "import horizon" | python 2>/dev/null ; echo $?)
 
 set -e
@@ -49,4 +50,22 @@ else
 fi
 
 $install_cmd -U $*
+
+install_cmd="pip install"
+uninstall_cmd="pip uninstall -y"
+
+# remove the horizon installed from source (can't get rid of it in test-requirements.txt due to global requirements conflict
+$uninstall_cmd horizon
+
+# TODO: replace the hardcoded branch with env variable
+HORIZON_PIP_LOCATION="git+https://git.openstack.org/openstack/horizon@master#egg=horizon"
+$install_cmd -U -e ${HORIZON_PIP_LOCATION}
+
+# install python-troveclient from source
+PYTHON_TROVECLIENT_PIP_LOCATION="git://github.com/Tesora/tesora-python-troveclient.git@$BRANCH_NAME#egg=python-troveclient"
+$install_cmd -U -e ${PYTHON_TROVECLIENT_PIP_LOCATION}
+
+PYTHON_MISTRALCLIENT_PIP_LOCATION="git://github.com/Tesora/tesora-python-mistralclient.git@$BRANCH_NAME#egg=python-mistralclient"
+$install_cmd -U -e ${PYTHON_MISTRALCLIENT_PIP_LOCATION}
+
 exit $?

@@ -12,25 +12,36 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import binascii
+
 from django.core.urlresolvers import reverse
 from django import http
+from django.utils.translation import ugettext_lazy as _
 from mox3.mox import IsA  # noqa
 import six
 
 from openstack_auth import policy
+from openstack_dashboard import api as dash_api
+
+from troveclient import common
 
 from trove_dashboard import api
+from trove_dashboard.content.database_backups.workflows import create_backup
+from trove_dashboard.content.databases.workflows import create_instance
+from trove_dashboard.content import utils
 from trove_dashboard.test import helpers as test
+
 
 INDEX_URL = reverse('horizon:project:database_backups:index')
 BACKUP_URL = reverse('horizon:project:database_backups:create')
 DETAILS_URL = reverse('horizon:project:database_backups:detail', args=['id'])
+RESTORE_URL = reverse('horizon:project:databases:launch')
 
 
 class DatabasesBackupsTests(test.TestCase):
     @test.create_stubs({api.trove: ('backup_list', 'instance_get')})
     def test_index(self):
-        api.trove.backup_list(IsA(http.HttpRequest))\
+        api.trove.backup_list(IsA(http.HttpRequest), marker=None)\
             .AndReturn(self.database_backups.list())
 
         api.trove.instance_get(IsA(http.HttpRequest),
@@ -59,34 +70,38 @@ class DatabasesBackupsTests(test.TestCase):
         self.assertMessageCount(res, error=1)
 
     @test.create_stubs({
-        api.trove: ('instance_list', 'backup_list', 'backup_create'),
+        api.trove: ('instance_list_all', 'backup_create', 'instance_backups'),
         policy: ('check',),
     })
     def test_launch_backup(self):
         policy.check((), IsA(http.HttpRequest)).MultipleTimes().AndReturn(True)
-        api.trove.instance_list(IsA(http.HttpRequest))\
-            .AndReturn(self.databases.list())
-        api.trove.backup_list(IsA(http.HttpRequest)) \
-            .AndReturn(self.database_backups.list())
+        (api.trove.instance_list_all(IsA(http.HttpRequest),
+                                     include_clustered=False)
+            .AndReturn(self.databases.list()))
 
         database = self.databases.first()
         backupName = "NewBackup"
         backupDesc = "Backup Description"
+
+        instance_widget = utils.build_instance_widget_field_name(database.id)
+
+        api.trove.instance_backups(IsA(http.HttpRequest), database) \
+            .AndReturn(self.database_backups.list())
 
         api.trove.backup_create(
             IsA(http.HttpRequest),
             backupName,
             database.id,
             backupDesc,
-            "")
+            None)
 
         self.mox.ReplayAll()
 
         post = {
             'name': backupName,
-            'instance': database.id,
+            'instance': instance_widget,
             'description': backupDesc,
-            'parent': ""
+            'parent': None
         }
         res = self.client.post(BACKUP_URL, post)
 
@@ -94,15 +109,14 @@ class DatabasesBackupsTests(test.TestCase):
         self.assertRedirectsNoFollow(res, INDEX_URL)
 
     @test.create_stubs({
-        api.trove: ('instance_list', 'backup_list'),
+        api.trove: ('instance_list_all',),
         policy: ('check',),
     })
     def test_launch_backup_exception(self):
         policy.check((), IsA(http.HttpRequest)).MultipleTimes().AndReturn(True)
-        api.trove.instance_list(IsA(http.HttpRequest))\
-            .AndRaise(self.exceptions.trove)
-        api.trove.backup_list(IsA(http.HttpRequest)) \
-            .AndReturn(self.database_backups.list())
+        (api.trove.instance_list_all(IsA(http.HttpRequest),
+                                     include_clustered=False)
+            .AndRaise(self.exceptions.trove))
 
         self.mox.ReplayAll()
 
@@ -112,20 +126,25 @@ class DatabasesBackupsTests(test.TestCase):
                                 'project/database_backups/backup.html')
 
     @test.create_stubs({
-        api.trove: ('instance_list', 'backup_list', 'backup_create'),
+        api.trove: ('instance_list_all', 'backup_create', 'instance_backups'),
         policy: ('check',),
     })
     def test_launch_backup_incr(self):
         policy.check((), IsA(http.HttpRequest)).MultipleTimes().AndReturn(True)
-        api.trove.instance_list(IsA(http.HttpRequest)) \
-            .AndReturn(self.databases.list())
-        api.trove.backup_list(IsA(http.HttpRequest)) \
-            .AndReturn(self.database_backups.list())
+        (api.trove.instance_list_all(IsA(http.HttpRequest),
+                                     include_clustered=False)
+            .AndReturn(self.databases.list()))
 
         database = self.databases.first()
         backupName = "NewBackup"
         backupDesc = "Backup Description"
         backupParent = self.database_backups.first()
+
+        instance_widget = utils.build_instance_widget_field_name(database.id)
+        field_name = utils.build_parent_backup_field_name(database.id)
+
+        api.trove.instance_backups(IsA(http.HttpRequest), database) \
+            .AndReturn(self.database_instance_backups.list())
 
         api.trove.backup_create(
             IsA(http.HttpRequest),
@@ -138,14 +157,42 @@ class DatabasesBackupsTests(test.TestCase):
 
         post = {
             'name': backupName,
-            'instance': database.id,
+            'instance': instance_widget,
             'description': backupDesc,
-            'parent': backupParent.id,
+            field_name: backupParent.id,
         }
         res = self.client.post(BACKUP_URL, post)
 
         self.assertNoFormErrors(res)
         self.assertRedirectsNoFollow(res, INDEX_URL)
+
+    @test.create_stubs({
+        api.trove: ('instance_list_all', 'instance_backups',)
+    })
+    def test_parent_backup_list(self):
+        database = self.databases.first()
+        request = http.HttpRequest()
+
+        (api.trove.instance_list_all(IsA(http.HttpRequest),
+                                     include_clustered=False)
+            .AndReturn(self.databases.list()))
+        api.trove.instance_backups(IsA(http.HttpRequest), database)\
+            .AndReturn(self.database_instance_backups.list())
+        api.trove.instance_backups(IsA(http.HttpRequest),
+                                   self.databases.list()[1])\
+            .AndReturn(self.database_backups.list()[1:])
+        for i in range(2, (len(self.databases.list()) - 1)):
+            api.trove.instance_backups(IsA(http.HttpRequest),
+                                       self.databases.list()[i]) \
+                .AndReturn([])
+
+        self.mox.ReplayAll()
+
+        field_name = utils.build_parent_backup_field_name(database.id)
+
+        backup_details = create_backup.BackupDetailsAction(request, None)
+        self.assertTrue(len(backup_details.fields[field_name].choices) ==
+                        len(self.database_instance_backups.list()) + 1)
 
     @test.create_stubs({api.trove: ('backup_get', 'instance_get')})
     def test_detail_backup(self):
@@ -191,3 +238,65 @@ class DatabasesBackupsTests(test.TestCase):
                       args=[incr_backup.id])
         res = self.client.get(url)
         self.assertTemplateUsed(res, 'project/database_backups/details.html')
+
+    @test.create_stubs({
+        api.trove: ('backup_get', 'backup_list', 'configuration_list',
+                    'datastore_flavors', 'datastore_list',
+                    'datastore_version_list', 'datastore_volume_types',
+                    'instance_list', 'region_list'),
+        dash_api.neutron: ('network_list_for_tenant',),
+        dash_api.nova: ('availability_zone_list',),
+    })
+    def test_restore_backup(self):
+        backup = self.database_backups.first()
+        api.trove.backup_get(IsA(http.HttpRequest), IsA(six.text_type)) \
+            .AndReturn(self.database_backups.first())
+        api.trove.backup_list(IsA(http.HttpRequest), marker=None).AndReturn(
+            self.database_backups.list())
+        api.trove.configuration_list(IsA(http.HttpRequest)) \
+            .AndReturn(self.database_configurations.list())
+        api.trove.datastore_flavors(IsA(http.HttpRequest),
+                                    IsA(six.string_types),
+                                    IsA(six.string_types)) \
+            .AndReturn(self.flavors.list())
+        api.trove.datastore_list(IsA(http.HttpRequest)) \
+            .AndReturn(self.datastores.list())
+        api.trove.datastore_version_list(IsA(http.HttpRequest),
+                                         backup.datastore['type']) \
+            .AndReturn(self.datastore_versions.list())
+        api.trove.datastore_volume_types(IsA(http.HttpRequest),
+                                         IsA(six.string_types),
+                                         IsA(six.string_types)) \
+            .AndReturn(self.database_volume_types.list())
+        api.trove.instance_list(IsA(http.HttpRequest), marker=None) \
+            .AndReturn(common.Paginated(self.databases.list()))
+        api.trove.region_list(IsA(http.HttpRequest))\
+            .AndReturn([])
+        dash_api.neutron.network_list_for_tenant(IsA(http.HttpRequest),
+                                                 IsA(six.string_types)).\
+            AndReturn(self.networks.list()[:1])
+        dash_api.nova.availability_zone_list(IsA(http.HttpRequest)) \
+            .AndReturn(self.availability_zones.list())
+        self.mox.ReplayAll()
+
+        url = RESTORE_URL + '?backup=%s' % self.database_backups.first().id
+        res = self.client.get(url)
+        self.assertTemplateUsed(res, 'project/databases/launch.html')
+
+        set_instance_detail_step = \
+            [step for step in res.context_data['workflow'].steps
+             if isinstance(step, create_instance.SetInstanceDetails)][0]
+        fields = set_instance_detail_step.action.fields
+        self.assertTrue(len(fields['datastore'].choices), 1)
+        text = 'mysql - 5.6'
+        choice = fields['datastore'].choices[0]
+        self.assertTrue(choice[0], binascii.hexlify(text))
+        self.assertTrue(choice[1], text)
+
+        advanced_step = [step for step in res.context_data['workflow'].steps
+                         if isinstance(step, create_instance.Advanced)][0]
+        fields = advanced_step.action.fields
+        self.assertTrue(len(fields['initial_state'].choices), 1)
+        choice = fields['initial_state'].choices[0]
+        self.assertTrue(choice[0], 'backup')
+        self.assertTrue(choice[1], _('Restore from Backup'))

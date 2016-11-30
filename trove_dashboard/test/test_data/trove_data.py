@@ -21,6 +21,7 @@ from troveclient.v1 import datastores
 from troveclient.v1 import flavors
 from troveclient.v1 import instances
 from troveclient.v1 import users
+from troveclient.v1 import volume_types
 
 from openstack_dashboard.test.test_data import utils
 
@@ -49,7 +50,9 @@ CLUSTER_DATA_ONE = {
             },
             "volume": {
                 "size": 100
-            }
+            },
+            "region": "regionOne",
+            "type": ["data"]
         },
         {
             "id": "965ef811-7c1d-47fc-89f2-a89dfdd23ef2",
@@ -62,7 +65,9 @@ CLUSTER_DATA_ONE = {
             },
             "volume": {
                 "size": 100
-            }
+            },
+            "region": "regionOne",
+            "type": ["data"]
         },
         {
             "id": "3642f41c-e8ad-4164-a089-3891bf7f2d2b",
@@ -75,13 +80,20 @@ CLUSTER_DATA_ONE = {
             },
             "volume": {
                 "size": 100
-            }
+            },
+            "region": "regionOne",
+            "type": ["data"]
         }
     ],
     "task": {
-        "name": "test_task"
+        "name": "NONE"
     },
-    "locality": "anti-affinity"
+    "locality": "anti-affinity",
+    "configuration": {
+        "id": "0ef978d3-7c83-4192-ab86-b7a0a5010fa0",
+        "links": [],
+        "name": "config1"
+    },
 }
 
 CLUSTER_DATA_TWO = {
@@ -107,7 +119,8 @@ CLUSTER_DATA_TWO = {
             },
             "volume": {
                 "size": 100
-            }
+            },
+            "region": "regionOne"
         },
         {
             "id": "965ef811-7c1d-47fc-89f2-a88199182122232",
@@ -119,7 +132,8 @@ CLUSTER_DATA_TWO = {
             },
             "volume": {
                 "size": 100
-            }
+            },
+            "region": "regionOne"
         },
         {
             "id": "3642f41c-e8ad-4164-a089-388199182122232",
@@ -131,7 +145,8 @@ CLUSTER_DATA_TWO = {
             },
             "volume": {
                 "size": 100
-            }
+            },
+            "region": "regionOne"
         }
     ],
     "task": {
@@ -213,10 +228,76 @@ DATABASE_DATA_THREE = {
         "links": [],
         "name": "config1"
     },
-    "replicas": {
+    "replicas": [{
         "id": "0ef978d3-7c83-4192-ab86-b7a0a5010fa0",
         "links": [],
-    }
+    }]
+}
+
+DATABASE_DATA_FOUR = {
+    "status": "ACTIVE",
+    "updated": "2015-01-12T22:00:09",
+    "name": "Test Database with Config",
+    "links": [],
+    "created": "2015-01-12T22:00:03",
+    "ip": [
+        "10.0.0.3",
+    ],
+    "volume": {
+        "used": 0.13,
+        "size": 1,
+    },
+    "flavor": {
+        "id": "1",
+        "links": [],
+    },
+    "datastore": {
+        "type": "postgresql",
+        "version": "9.4"
+    },
+    "id": "c3369597-b53a-4bd4-bf54-a1b57c1291b8",
+    "configuration": {
+        "id": "0ef978d3-7c83-4192-ab86-b7a0a5010fa0",
+        "links": [],
+        "name": "config1"
+    },
+    "replicas": [{
+        "id": "0ef978d3-7c83-4192-ab86-b7a0a5010fa0",
+        "links": [],
+    }]
+}
+
+DATABASE_DATA_BUILD = {
+    "status": "BUILD",
+    "updated": "2015-01-12T22:00:09",
+    "name": "Test Database with Build State",
+    "links": [],
+    "created": "2015-01-12T22:00:03",
+    "ip": [
+        "10.0.0.3",
+    ],
+    "volume": {
+        "used": 0.13,
+        "size": 1,
+    },
+    "flavor": {
+        "id": "1",
+        "links": [],
+    },
+    "datastore": {
+        "type": "mysql",
+        "version": "5.5"
+    },
+    "id": "c3345597-b53a-4bd4-bf54-41957c1291b8",
+    "configuration": {
+        "id": "0ef548d3-7c83-4192-ab86-b7a0a5010fa0",
+        "links": [],
+        "name": "config1"
+    },
+    "replicas": [{
+        "id": "0ef458d3-7c83-4192-ab86-b7a0a5010fa0",
+        "links": [],
+    }]
 }
 
 BACKUP_ONE = {
@@ -229,6 +310,11 @@ BACKUP_ONE = {
     "size": 0.13,
     "id": "0edb3c14-8919-4583-9add-00df9e524081",
     "description": "Long description of backup",
+    "datastore": {
+        "type": "mysql",
+        "version": "5.6",
+        "version_id": "500a6d52-8347-4e00-8e4c-f4fa9cf96ae9"
+    },
 }
 
 BACKUP_TWO = {
@@ -241,6 +327,11 @@ BACKUP_TWO = {
     "size": 0.13,
     "id": "e4602a3c-2bca-478f-b059-b6c215510fb4",
     "description": "Longer description of backup",
+    "datastore": {
+        "type": "mysql",
+        "version": "5.6",
+        "version_id": "500a6d52-8347-4e00-8e4c-f4fa9cf96ae9"
+    },
 }
 
 BACKUP_TWO_INC = {
@@ -254,6 +345,44 @@ BACKUP_TWO_INC = {
     "id": "e4602a3c-2bca-478f-b059-b6c215510fb5",
     "description": "Longer description of backup",
     "parent_id": "e4602a3c-2bca-478f-b059-b6c215510fb4",
+    "datastore": {
+        "type": "mysql",
+        "version": "5.6",
+        "version_id": "500a6d52-8347-4e00-8e4c-f4fa9cf96ae9"
+    },
+}
+
+BACKUP_SCHEDULE_ONE = {
+    "id": "30aa4a16-3f22-429e-ae93-201cad729d75",
+    "instance": "4d7b3f57-44f5-41d2-8e86-36b88cad572a",
+    "name": "backup1",
+    "pattern": "* * 1 * * *",
+    "next_execution_time": "2016-08-01T00:00:00",
+    "input": "{\"description\": \"description of backup1\", "
+             "\"parent_id\": \"2c8cd131-08e3-48bd-94ed-ac201d94b3cb\"}"
+}
+
+BACKUP_SCHEDULE_TWO = {
+    "id": "955233fd-57d1-480d-8161-393df771997f",
+    "instance": "6ddc36d9-73db-4e23-b52e-368937d72719",
+    "name": "backup2",
+    "pattern": "30 * * * * *",
+    "next_execution_time": "2016-08-01T00:30:00",
+    "input": "{\"description\": \"description of backup2\"}"
+}
+
+BACKUP_EXECUTION_ONE = {
+    "id": "30aa4a16-3f22-429e-ae93-201cad729d79",
+    "created_at": "2016-07-01T00:00:00",
+    "state": "error",
+    "output": "there was some error",
+}
+
+BACKUP_EXECUTION_TWO = {
+    "id": "30aa4a16-3f22-429e-ae93-201cad729d73",
+    "created_at": "2016-08-01T00:00:00",
+    "state": "error",
+    "output": "there was some error",
 }
 
 CONFIG_ONE = {
@@ -284,6 +413,21 @@ CONFIG_TWO = {
     "description": "Long description of configuration two",
     "datastore_name": "mysql",
     "datastore_version_name": "5.6"
+}
+
+CONFIG_THREE = {
+    "updated": "2014-08-11T14:33:35",
+    "name": "config3",
+    "created": "2014-08-11T14:33:35",
+    "instance_count": 0,
+    "values": {
+        "collation_server": "latin1_swedish_ci",
+        "max_connections": 5000
+    },
+    "id": "87948232-10e7-4636-f3d3-a5f1593b7d16",
+    "description": "Long description of configuration two",
+    "datastore_name": "mongodb",
+    "datastore_version_name": "2.6"
 }
 
 CONFIG_INSTANCE_ONE = {
@@ -410,6 +554,18 @@ FLAVOR_THREE = {
     "name": "test.1"
 }
 
+VOLUME_TYPE_ONE = {
+    "id": "1",
+    "name": "vol_type_1",
+    "description": "type 1 description",
+}
+
+VOLUME_TYPE_TWO = {
+    "id": "2",
+    "name": "vol_type_2",
+    "description": "type 2 description",
+}
+
 VERSION_MONGODB_2_6 = {
     "name": "2.6",
     "links": [],
@@ -477,6 +633,19 @@ LOG_4 = {
 }
 
 
+class Bucket(object):
+    def __init__(self, name, password, bucket_ramsize, bucket_replica,
+                 enable_index_replica, bucket_eviction_policy,
+                 bucket_priority):
+        self.name = name
+        self.password = password
+        self.bucket_ramsize = bucket_ramsize
+        self.bucket_replica = bucket_replica
+        self.enable_index_replica = enable_index_replica
+        self.bucket_eviction_policy = bucket_eviction_policy
+        self.bucket_priority = bucket_priority
+
+
 def data(TEST):
     cluster1 = clusters.Cluster(clusters.Clusters(None),
                                 CLUSTER_DATA_ONE)
@@ -488,14 +657,28 @@ def data(TEST):
                                    DATABASE_DATA_TWO)
     database3 = instances.Instance(instances.Instances(None),
                                    DATABASE_DATA_THREE)
+    database4 = instances.Instance(instances.Instances(None),
+                                   DATABASE_DATA_FOUR)
+    database_build = instances.Instance(instances.Instances(None),
+                                        DATABASE_DATA_BUILD)
     bkup1 = backups.Backup(backups.Backups(None), BACKUP_ONE)
     bkup2 = backups.Backup(backups.Backups(None), BACKUP_TWO)
     bkup3 = backups.Backup(backups.Backups(None), BACKUP_TWO_INC)
+    bkup_sched_1 = backups.Schedule(backups.Backups(None),
+                                    BACKUP_SCHEDULE_ONE)
+    bkup_sched_2 = backups.Schedule(backups.Backups(None),
+                                    BACKUP_SCHEDULE_TWO)
+    bkup_sched_1_execution_1 = backups.ScheduleExecution(backups.Backups(None),
+                                                         BACKUP_EXECUTION_ONE)
+    bkup_sched_1_execution_2 = backups.ScheduleExecution(backups.Backups(None),
+                                                         BACKUP_EXECUTION_TWO)
 
     cfg1 = configurations.Configuration(configurations.Configurations(None),
                                         CONFIG_ONE)
     cfg2 = configurations.Configuration(configurations.Configurations(None),
                                         CONFIG_TWO)
+    cfg3 = configurations.Configuration(configurations.Configurations(None),
+                                        CONFIG_THREE)
 
     user1 = users.User(users.Users(None), USER_ONE)
     user_db1 = databases.Database(databases.Databases(None),
@@ -515,6 +698,12 @@ def data(TEST):
     flavor1 = flavors.Flavor(flavors.Flavors(None), FLAVOR_ONE)
     flavor2 = flavors.Flavor(flavors.Flavors(None), FLAVOR_TWO)
     flavor3 = flavors.Flavor(flavors.Flavors(None), FLAVOR_THREE)
+
+    volume_type1 = volume_types.VolumeType(volume_types.VolumeTypes(None),
+                                           VOLUME_TYPE_ONE)
+    volume_type2 = volume_types.VolumeType(volume_types.VolumeTypes(None),
+                                           VOLUME_TYPE_TWO)
+
     datastore_mongodb = datastores.Datastore(datastores.Datastores(None),
                                              DATASTORE_MONGODB)
     version_mongodb_2_6 = datastores.\
@@ -536,26 +725,60 @@ def data(TEST):
     log3 = instances.DatastoreLog(instances.Instances(None), LOG_3)
     log4 = instances.DatastoreLog(instances.Instances(None), LOG_4)
 
+    region1 = "regionOne"
+    region2 = "regionTwo"
+
+    TEST.trove_buckets = utils.TestDataContainer()
+    TEST.trove_buckets.add(
+        Bucket("bucket1",
+               password="password",
+               bucket_ramsize=512,
+               bucket_replica=1,
+               enable_index_replica=True,
+               bucket_eviction_policy="valueOnly",
+               bucket_priority="low",
+               ))
+    TEST.trove_buckets.add(
+        Bucket("bucket2",
+               password="password",
+               bucket_ramsize=512,
+               bucket_replica=1,
+               enable_index_replica=True,
+               bucket_eviction_policy="valueOnly",
+               bucket_priority="low",
+               ))
     TEST.trove_clusters = utils.TestDataContainer()
     TEST.trove_clusters.add(cluster1)
     TEST.trove_clusters.add(cluster2)
     TEST.databases = utils.TestDataContainer()
     TEST.database_backups = utils.TestDataContainer()
+    TEST.database_instance_backups = utils.TestDataContainer()
     TEST.database_configurations = utils.TestDataContainer()
     TEST.database_users = utils.TestDataContainer()
     TEST.database_user_dbs = utils.TestDataContainer()
     TEST.database_user_roots = utils.TestDataContainer()
     TEST.database_flavors = utils.TestDataContainer()
+    TEST.database_volume_types = utils.TestDataContainer()
 
     TEST.databases.add(database1)
     TEST.databases.add(database2)
     TEST.databases.add(database3)
+    TEST.databases.add(database4)
+    TEST.databases.add(database_build)
     TEST.database_backups.add(bkup1)
     TEST.database_backups.add(bkup2)
     TEST.database_backups.add(bkup3)
+    TEST.database_instance_backups.add(bkup1)
+
+    TEST.database_backup_schedules = utils.TestDataContainer()
+    TEST.database_backup_schedules.add(bkup_sched_1, bkup_sched_2)
+    TEST.database_backup_schedule_executions = utils.TestDataContainer()
+    TEST.database_backup_schedule_executions.add(bkup_sched_1_execution_1,
+                                                 bkup_sched_1_execution_2)
 
     TEST.database_configurations.add(cfg1)
     TEST.database_configurations.add(cfg2)
+    TEST.database_configurations.add(cfg3)
 
     TEST.configuration_parameters = utils.TestDataContainer()
     for parameter in CONFIG_PARAMS_ONE:
@@ -577,12 +800,14 @@ def data(TEST):
     TEST.datastores.add(datastore_vertica)
     TEST.datastores.add(datastore1)
     TEST.database_flavors.add(flavor1, flavor2, flavor3)
+    TEST.database_volume_types.add(volume_type1, volume_type2)
     TEST.datastore_versions = utils.TestDataContainer()
     TEST.datastore_versions.add(version_vertica_7_1)
     TEST.datastore_versions.add(version_redis_3_0)
     TEST.datastore_versions.add(version_mongodb_2_6)
     TEST.datastore_versions.add(version1)
     TEST.datastore_versions.add(version2)
-
     TEST.logs = utils.TestDataContainer()
     TEST.logs.add(log1, log2, log3, log4)
+    TEST.trove_regions = utils.TestDataContainer()
+    TEST.trove_regions.add(region1, region2)

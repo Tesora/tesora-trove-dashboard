@@ -42,28 +42,30 @@ def has_cluster(cluster_id):
 
 
 class ClusterInstanceManager(object):
-
-    instances = []
-
     def __init__(self, cluster_id):
         self.cluster_id = cluster_id
+        self.instances = []
 
     def get_instances(self):
+        if not hasattr(self, 'instances'):
+            self.instances = []
         return self.instances
 
     def get_instance(self, id):
-        for instance in self.instances:
+        for instance in self.get_instances():
             if instance.id == id:
                 return instance
         return None
 
     def add_instance(self, id, name, flavor_id,
-                     flavor, volume, type, related_to, nics):
+                     flavor, volume, type, related_to, nics,
+                     availability_zone, region):
         instance = ClusterInstance(id, name, flavor_id, flavor,
-                                   volume, type, related_to, nics)
+                                   volume, type, related_to, nics,
+                                   availability_zone, region)
         self.instances.append(instance)
         update(self.cluster_id, self)
-        return self.instances
+        return self.get_instances()
 
     def delete_instance(self, id):
         instance = self.get_instance(id)
@@ -72,12 +74,13 @@ class ClusterInstanceManager(object):
             update(self.cluster_id, self)
 
     def clear_instances(self):
-        del self.instances[:]
+        self.instances = []
+        update(self.cluster_id, self)
 
 
 class ClusterInstance(object):
-    def __init__(self, id, name, flavor_id, flavor, volume, type,
-                 related_to, nics):
+    def __init__(self, id, name, flavor_id, flavor, volume, type, related_to,
+                 nics, availability_zone, region):
         self.id = id
         self.name = name
         self.flavor_id = flavor_id
@@ -86,3 +89,5 @@ class ClusterInstance(object):
         self.type = type
         self.related_to = related_to
         self.nics = nics
+        self.availability_zone = availability_zone
+        self.region = region

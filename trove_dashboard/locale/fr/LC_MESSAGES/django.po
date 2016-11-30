@@ -1,6 +1,9 @@
 # Andreas Jaeger <jaegerandi@gmail.com>, 2016. #zanata
+# Benjamin ACH <benjamin_ach@hotmail.com>, 2016. #zanata
+# Cedric Savignan <liced@liced.fr>, 2016. #zanata
 # Corinne Verheyde <cverheyd@gmail.com>, 2016. #zanata
 # Gérald LONLAS <g.lonlas@gmail.com>, 2016. #zanata
+# JF Taltavull <jftalta@gmail.com>, 2016. #zanata
 msgid ""
 msgstr ""
 "Project-Id-Version: trove-dashboard 8.0.0.0b2.dev1\n"
@@ -30,6 +33,9 @@ msgstr ""
 "changer l'ordre\n"
 "  des NIC en faisant également un glisser-déposer.\n"
 "  "
+
+msgid "\"Clusters\""
+msgstr "\"Clusters\""
 
 #, python-format
 msgid "%(name)s | %(RAM)s RAM"
@@ -790,6 +796,7 @@ msgstr ""
 "Le mot de passe est visible uniquement juste après l'activation de root ou "
 "sa réinitialisation."
 
+#, fuzzy
 msgid ""
 "Please note:</strong> The new value must be greater than the existing volume "
 "size."

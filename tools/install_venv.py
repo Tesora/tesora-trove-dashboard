@@ -113,9 +113,12 @@ def pip_install(*args):
     args = [WITH_VENV, 'pip', 'install', '--upgrade'] + list(args)
     run_command(args, redirect_output=False)
 
+def pip_uninstall(*args):
+    args = [WITH_VENV, 'pip', 'uninstall', '-y'] + list(args)
+    run_command(args, redirect_output=False)
 
 def pip_install_with_horizon(*args):
-    args = [WITH_VENV, PIP_INSTALL_WRAPPER, 'unconstrained'] + list(args)
+    args = [WITH_VENV, PIP_INSTALL_WRAPPER, " ".join(args)]
     run_command(args, redirect_output=False)
 
 
@@ -130,12 +133,23 @@ def install_dependencies(venv=VENV):
     pthfile = os.path.join(venv, "lib", py, "site-packages", "dashboard.pth")
     f = open(pthfile, 'w')
     f.write("%s\n" % ROOT)
+    print "DONE Installing dependencies..."
 
 
 def install_horizon():
     print 'Installing horizon module in development mode...'
     run_command([WITH_VENV, 'python', 'setup.py', 'develop'], cwd=ROOT)
 
+def install_tesora_requirements():
+    branch_name = os.getenv('BRANCH_NAME', 'master')
+
+    tesora_python_troveclient = VENV + "/src/python-troveclient"
+    pip_install('-e', "git://github.com/Tesora/tesora-python-troveclient.git@" + branch_name + "#egg=python-troveclient")
+    run_command([WITH_VENV, 'python', 'setup.py', 'install'], cwd=tesora_python_troveclient)
+
+    tesora_python_mistralclient = VENV + "/src/python-mistralclient"
+    pip_install('-e', "git://github.com/Tesora/tesora-python-mistralclient.git@" + branch_name + "#egg=python-mistralclient")
+    run_command([WITH_VENV, 'python', 'setup.py', 'install'], cwd=tesora_python_mistralclient)
 
 def print_summary():
     summary = """
@@ -154,6 +168,7 @@ def main():
     create_virtualenv()
     install_dependencies()
     install_horizon()
+    install_tesora_requirements()
     print_summary()
 
 if __name__ == '__main__':

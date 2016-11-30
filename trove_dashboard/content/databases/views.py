@@ -38,6 +38,9 @@ from trove_dashboard.content.databases import forms
 from trove_dashboard.content.databases import tables
 from trove_dashboard.content.databases import tabs
 from trove_dashboard.content.databases import workflows
+from trove_dashboard.content import utils
+from trove_dashboard.templatetags.tesora import tesora_version
+
 
 LOG = logging.getLogger(__name__)
 
@@ -46,6 +49,16 @@ class IndexView(horizon_tables.DataTableView):
     table_class = tables.InstancesTable
     template_name = 'project/databases/index.html'
     page_title = _("Instances")
+
+    def get_context_data(self, **kwargs):
+        context = super(IndexView, self).get_context_data(**kwargs)
+        try:
+            context["version"] = tesora_version()
+        except Exception:
+            exceptions.handle(self.request,
+                              _('Unable to retrieve version information.'))
+
+        return context
 
     def has_more_data(self, table):
         return self._more
@@ -113,19 +126,33 @@ class CreateUserView(horizon_forms.ModalFormView):
     success_url = 'horizon:project:databases:detail'
 
     def get_success_url(self):
-        return reverse(self.success_url,
-                       args=(self.kwargs['instance_id'],))
+        return reverse(self.success_url, args=(self.get_id(),))
 
     def get_context_data(self, **kwargs):
         context = super(CreateUserView, self).get_context_data(**kwargs)
-        context['instance_id'] = self.kwargs['instance_id']
-        args = (self.kwargs['instance_id'],)
+        context['instance_id'] = self.get_id()
+        args = (self.get_id(),)
         context['submit_url'] = reverse(self.submit_url, args=args)
         return context
 
     def get_initial(self):
-        instance_id = self.kwargs['instance_id']
-        return {'instance_id': instance_id}
+        instance_id = self.get_id()
+        instance = self.get_instance()
+        return {'instance_id': instance_id,
+                'datastore': instance.datastore}
+
+    @memoized.memoized_method
+    def get_instance(self):
+        instance_id = self.get_id()
+        try:
+            return api.trove.instance_get(self.request, instance_id)
+        except Exception:
+            msg = _('Unable to retrieve instance details.')
+            redirect = reverse('horizon:project:databases:index')
+            exceptions.handle(self.request, msg, redirect=redirect)
+
+    def get_id(self):
+        return self.kwargs['instance_id']
 
 
 class EditUserView(horizon_forms.ModalFormView):
@@ -146,16 +173,18 @@ class EditUserView(horizon_forms.ModalFormView):
         context = super(EditUserView, self).get_context_data(**kwargs)
         context['instance_id'] = self.kwargs['instance_id']
         context['user_name'] = self.kwargs['user_name']
-        args = (self.kwargs['instance_id'], self.kwargs['user_name'])
+        context['user_host'] = self.kwargs['user_host']
+        args = (self.kwargs['instance_id'], self.kwargs['user_name'],
+                self.kwargs['user_host'])
         context['submit_url'] = reverse(self.submit_url, args=args)
         return context
 
     def get_initial(self):
         instance_id = self.kwargs['instance_id']
         user_name = self.kwargs['user_name']
-        host = tables.parse_host_param(self.request)
+        user_host = self.kwargs['user_host']
         return {'instance_id': instance_id, 'user_name': user_name,
-                'host': host}
+                'user_host': user_host}
 
 
 class AccessDetailView(horizon_tables.DataTableView):
@@ -167,6 +196,7 @@ class AccessDetailView(horizon_tables.DataTableView):
     def get_data(self):
         instance_id = self.kwargs['instance_id']
         user_name = self.kwargs['user_name']
+        user_host = utils.parse_user_host(self.kwargs['user_host'])
         try:
             databases = api.trove.database_list(self.request, instance_id)
         except Exception:
@@ -177,8 +207,8 @@ class AccessDetailView(horizon_tables.DataTableView):
                               _('Unable to retrieve databases.'),
                               redirect=redirect)
         try:
-            granted = api.trove.user_list_access(
-                self.request, instance_id, user_name)
+            granted = api.trove.user_show_access(
+                self.request, instance_id, user_name, host=user_host)
         except Exception:
             granted = []
             redirect = reverse('horizon:project:databases:detail',
@@ -306,7 +336,19 @@ class CreateDatabaseView(horizon_forms.ModalFormView):
 
     def get_initial(self):
         instance_id = self.kwargs['instance_id']
-        return {'instance_id': instance_id}
+        instance = self.get_instance()
+        return {'instance_id': instance_id,
+                'datastore': instance.datastore}
+
+    @memoized.memoized_method
+    def get_instance(self):
+        instance_id = self.kwargs['instance_id']
+        try:
+            return api.trove.instance_get(self.request, instance_id)
+        except Exception:
+            msg = _('Unable to retrieve instance details.')
+            redirect = reverse('horizon:project:databases:index')
+            exceptions.handle(self.request, msg, redirect=redirect)
 
 
 class ResizeVolumeView(horizon_forms.ModalFormView):
@@ -412,7 +454,7 @@ class PromoteToReplicaSourceView(horizon_forms.ModalFormView):
     modal_header = _("Promote to Replica Source")
     modal_id = "promote_to_replica_source_modal"
     template_name = 'project/databases/promote_to_replica_source.html'
-    submit_lable = _("Promote")
+    submit_label = _("Promote")
     submit_url = 'horizon:project:databases:promote_to_replica_source'
     success_url = reverse_lazy('horizon:project:databases:index')
 

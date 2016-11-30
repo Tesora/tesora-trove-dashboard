@@ -12,13 +12,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import six.moves.urllib.parse as urlparse
-
 from django.conf import settings
 from django.core import urlresolvers
 from django.template import defaultfilters as d_filters
-from django.utils import http
-from django.utils.translation import pgettext_lazy
 from django.utils.translation import ugettext_lazy as _
 from django.utils.translation import ungettext_lazy
 
@@ -29,11 +25,13 @@ from horizon.templatetags import sizeformat
 from horizon.utils import filters
 
 from trove_dashboard import api
-from trove_dashboard.content.database_backups \
-    import tables as backup_tables
-
-
-ACTIVE_STATES = ("ACTIVE",)
+from trove_dashboard.content.database_backups import tables as backup_tables
+from trove_dashboard.content.databases.couchbase import (
+    tables as couchbase_tables)
+from trove_dashboard.content.databases.schedules import (
+    tables as schedules_tables)
+from trove_dashboard.content.databases.upgrade import tables as upgrade_tables
+from trove_dashboard.content import utils as database_utils
 
 
 class DeleteInstance(tables.DeleteAction):
@@ -87,12 +85,55 @@ class RestartInstance(tables.BatchAction):
     classes = ('btn-danger', 'btn-reboot')
 
     def allowed(self, request, instance=None):
-        return ((instance.status in ACTIVE_STATES
+        return ((instance.status in database_utils.ACTIVE_STATES
                  or instance.status == 'SHUTDOWN'
                  or instance.status == 'RESTART_REQUIRED'))
 
     def action(self, request, obj_id):
         api.trove.instance_restart(request, obj_id)
+
+
+class ForceDeleteAction(tables.DeleteAction):
+    name = "force_delete_action"
+    verbose_name = _("Force Delete")
+    help_text = _("Force deleted instances are not recoverable.")
+
+    @staticmethod
+    def action_present(count):
+        return ungettext_lazy(
+            u"Force Delete Instance",
+            u"Force Delete Instances",
+            count
+        )
+
+    @staticmethod
+    def action_past(count):
+        return ungettext_lazy(
+            u"Scheduled forced deletion of instance",
+            u"Scheduled forced deletion of instances",
+            count
+        )
+
+    def delete(self, request, obj_id):
+        api.trove.instance_force_delete(request, obj_id)
+
+
+class ResetStatusAction(tables.Action):
+    name = "reset_status_action"
+    verbose_name = _("Reset Status")
+    classes = ('btn-danger',)
+
+    def single(self, table, request, object_id):
+        try:
+            api.trove.instance_reset_status(request, object_id)
+            messages.success(request,
+                             _("Successfully reset status of instance."))
+        except Exception as e:
+            messages.warning(request,
+                             _("Cannot reset status: %s") % e.message)
+
+    def allowed(self, request, datum):
+        return False
 
 
 class DetachReplica(tables.BatchAction):
@@ -116,7 +157,7 @@ class DetachReplica(tables.BatchAction):
     classes = ('btn-danger', 'btn-detach-replica')
 
     def allowed(self, request, instance=None):
-        return (instance.status in ACTIVE_STATES
+        return (instance.status in database_utils.ACTIVE_STATES
                 and hasattr(instance, 'replica_of'))
 
     def action(self, request, obj_id):
@@ -130,10 +171,23 @@ class PromoteToReplicaSource(tables.LinkAction):
     classes = ("ajax-modal", "btn-promote-to-replica-source")
 
     def allowed(self, request, instance=None):
-        return (instance.status in ACTIVE_STATES
+        return (instance.status in database_utils.ACTIVE_STATES
                 and hasattr(instance, 'replica_of'))
 
     def get_link_url(self, datum):
+        instance_id = self.table.get_object_id(datum)
+        return urlresolvers.reverse(self.url, args=[instance_id])
+
+
+class ViewReplicas(tables.LinkAction):
+    name = "view_replicas"
+    verbose_name = _("View Replicas")
+    url = "horizon:project:database_topology:replicas"
+
+    def allowed(self, request, instance):
+        return hasattr(instance, 'replicas')
+
+    def get_link_url(self, datum=None):
         instance_id = self.table.get_object_id(datum)
         return urlresolvers.reverse(self.url, args=[instance_id])
 
@@ -197,7 +251,8 @@ class GrantAccess(tables.BatchAction):
             self.table.kwargs['instance_id'],
             self.table.kwargs['user_name'],
             [obj_id],
-            host=parse_host_param(request))
+            host=database_utils.parse_user_host(self.table.kwargs[
+                                                'user_host']))
 
 
 class RevokeAccess(tables.BatchAction):
@@ -231,17 +286,8 @@ class RevokeAccess(tables.BatchAction):
             self.table.kwargs['instance_id'],
             self.table.kwargs['user_name'],
             obj_id,
-            host=parse_host_param(request))
-
-
-def parse_host_param(request):
-    host = None
-    if request.META.get('QUERY_STRING', ''):
-        param = urlparse.parse_qs(request.META.get('QUERY_STRING'))
-        values = param.get('host')
-        if values:
-            host = next(iter(values), None)
-    return host
+            host=database_utils.parse_user_host(self.table.kwargs[
+                                                'user_host']))
 
 
 class AccessTable(tables.DataTable):
@@ -268,18 +314,15 @@ class ManageAccess(tables.LinkAction):
 
     def allowed(self, request, instance=None):
         instance = self.table.kwargs['instance']
-        return (instance.status in ACTIVE_STATES and
+        return (instance.status in database_utils.ACTIVE_STATES and
                 has_user_add_perm(request))
 
     def get_link_url(self, datum):
         user = datum
-        url = urlresolvers.reverse(self.url, args=[user.instance.id,
-                                                   user.name])
-        if user.host:
-            params = http.urlencode({"host": user.host})
-            url = "?".join([url, params])
-
-        return url
+        return urlresolvers.reverse(self.url, args=[user.instance.id,
+                                                    user.name,
+                                                    getattr(user, 'host', '-')
+                                                    ])
 
 
 class CreateUser(tables.LinkAction):
@@ -290,13 +333,16 @@ class CreateUser(tables.LinkAction):
     icon = "plus"
 
     def allowed(self, request, instance=None):
-        instance = self.table.kwargs['instance']
-        return (instance.status in ACTIVE_STATES and
+        instance = self.get_table_id()
+        return (instance.status in database_utils.ACTIVE_STATES and
                 has_user_add_perm(request))
 
     def get_link_url(self, datum=None):
-        instance_id = self.table.kwargs['instance_id']
-        return urlresolvers.reverse(self.url, args=[instance_id])
+        instance = self.get_table_id()
+        return urlresolvers.reverse(self.url, args=[instance.id])
+
+    def get_table_id(self):
+        return self.table.kwargs['instance']
 
 
 class EditUser(tables.LinkAction):
@@ -307,19 +353,19 @@ class EditUser(tables.LinkAction):
     icon = "pencil"
 
     def allowed(self, request, instance=None):
-        instance = self.table.kwargs['instance']
-        return (instance.status in ACTIVE_STATES and
+        instance = self.get_table_id()
+        return (instance.status in database_utils.ACTIVE_STATES and
                 has_user_add_perm(request))
 
     def get_link_url(self, datum):
         user = datum
-        url = urlresolvers.reverse(self.url, args=[user.instance.id,
-                                                   user.name])
-        if user.host:
-            params = http.urlencode({"host": user.host})
-            url = "?".join([url, params])
+        return urlresolvers.reverse(self.url, args=[user.instance.id,
+                                                    user.name,
+                                                    getattr(user, 'host', '-')
+                                                    ])
 
-        return url
+    def get_table_id(self):
+        return self.table.kwargs['instance']
 
 
 def has_user_add_perm(request):
@@ -347,8 +393,9 @@ class DeleteUser(tables.DeleteAction):
         )
 
     def delete(self, request, obj_id):
-        datum = self.table.get_object_by_id(obj_id)
-        api.trove.user_delete(request, datum.instance.id, datum.name)
+        user = self.table.get_object_by_id(obj_id)
+        api.trove.user_delete(request, user.instance.id, user.name,
+                              host=getattr(user, 'host', None))
 
 
 class CreateDatabase(tables.LinkAction):
@@ -359,13 +406,16 @@ class CreateDatabase(tables.LinkAction):
     icon = "plus"
 
     def allowed(self, request, database=None):
-        instance = self.table.kwargs['instance']
-        return (instance.status in ACTIVE_STATES and
+        instance = self.get_table_id()
+        return (instance.status in database_utils.ACTIVE_STATES and
                 has_database_add_perm(request))
 
     def get_link_url(self, datum=None):
-        instance_id = self.table.kwargs['instance_id']
-        return urlresolvers.reverse(self.url, args=[instance_id])
+        instance = self.get_table_id()
+        return urlresolvers.reverse(self.url, args=[instance.id])
+
+    def get_table_id(self):
+        return self.table.kwargs['instance']
 
 
 def has_database_add_perm(request):
@@ -417,12 +467,12 @@ class CreateBackup(tables.LinkAction):
     icon = "camera"
 
     def allowed(self, request, instance=None):
-        return (instance.status in ACTIVE_STATES and
+        return (instance.status in database_utils.ACTIVE_STATES and
                 request.user.has_perm('openstack.services.object-store'))
 
     def get_link_url(self, datam):
         url = urlresolvers.reverse(self.url)
-        return url + "?instance=%s" % datam.id
+        return url + "?instance=%s" % datam.id + "&include_clustered=False"
 
 
 class ResizeVolume(tables.LinkAction):
@@ -432,7 +482,7 @@ class ResizeVolume(tables.LinkAction):
     classes = ("ajax-modal", "btn-resize")
 
     def allowed(self, request, instance=None):
-        return instance.status in ACTIVE_STATES
+        return instance.status in database_utils.ACTIVE_STATES
 
     def get_link_url(self, datum):
         instance_id = self.table.get_object_id(datum)
@@ -446,7 +496,7 @@ class ResizeInstance(tables.LinkAction):
     classes = ("ajax-modal", "btn-resize")
 
     def allowed(self, request, instance=None):
-        return ((instance.status in ACTIVE_STATES
+        return ((instance.status in database_utils.ACTIVE_STATES
                  or instance.status == 'SHUTOFF'))
 
     def get_link_url(self, datum):
@@ -461,7 +511,7 @@ class AttachConfiguration(tables.LinkAction):
     classes = ("btn-attach-config", "ajax-modal")
 
     def allowed(self, request, instance=None):
-        return (instance.status in ACTIVE_STATES
+        return (instance.status in database_utils.ACTIVE_STATES
                 and not hasattr(instance, 'configuration'))
 
 
@@ -486,7 +536,7 @@ class DetachConfiguration(tables.BatchAction):
     classes = ('btn-danger', 'btn-detach-config')
 
     def allowed(self, request, instance=None):
-        return (instance.status in ACTIVE_STATES and
+        return (instance.status in database_utils.ACTIVE_STATES and
                 hasattr(instance, 'configuration'))
 
     def action(self, request, obj_id):
@@ -530,7 +580,7 @@ class ManageRoot(tables.LinkAction):
     url = "horizon:project:databases:manage_root"
 
     def allowed(self, request, instance):
-        return instance.status in ACTIVE_STATES
+        return instance.status in database_utils.ACTIVE_STATES
 
     def get_link_url(self, datum=None):
         instance_id = self.table.get_object_id(datum)
@@ -612,42 +662,17 @@ def get_databases(user):
     return _("-")
 
 
+def get_roles(user):
+    raw_roles = [role for role in getattr(user, "roles", [])]
+    if not raw_roles:
+        return _("-")
+    else:
+        roles = [role['name'] for role in raw_roles]
+        roles.sort()
+        return ', '.join(roles)
+
+
 class InstancesTable(tables.DataTable):
-    STATUS_CHOICES = (
-        ("ACTIVE", True),
-        ("BLOCKED", True),
-        ("BUILD", None),
-        ("FAILED", False),
-        ("REBOOT", None),
-        ("RESIZE", None),
-        ("BACKUP", None),
-        ("SHUTDOWN", False),
-        ("ERROR", False),
-        ("RESTART_REQUIRED", None),
-    )
-    STATUS_DISPLAY_CHOICES = (
-        ("ACTIVE", pgettext_lazy("Current status of a Database Instance",
-                                 u"Active")),
-        ("BLOCKED", pgettext_lazy("Current status of a Database Instance",
-                                  u"Blocked")),
-        ("BUILD", pgettext_lazy("Current status of a Database Instance",
-                                u"Building")),
-        ("FAILED", pgettext_lazy("Current status of a Database Instance",
-                                 u"Failed")),
-        ("REBOOT", pgettext_lazy("Current status of a Database Instance",
-                                 u"Rebooting")),
-        ("RESIZE", pgettext_lazy("Current status of a Database Instance",
-                                 u"Resizing")),
-        ("BACKUP", pgettext_lazy("Current status of a Database Instance",
-                                 u"Backup")),
-        ("SHUTDOWN", pgettext_lazy("Current status of a Database Instance",
-                                   u"Shutdown")),
-        ("ERROR", pgettext_lazy("Current status of a Database Instance",
-                                u"Error")),
-        ("RESTART_REQUIRED",
-         pgettext_lazy("Current status of a Database Instance",
-                       u"Restart Required")),
-    )
     name = tables.Column("name",
                          link="horizon:project:databases:detail",
                          verbose_name=_("Instance Name"))
@@ -665,8 +690,9 @@ class InstancesTable(tables.DataTable):
     status = tables.Column("status",
                            verbose_name=_("Status"),
                            status=True,
-                           status_choices=STATUS_CHOICES,
-                           display_choices=STATUS_DISPLAY_CHOICES)
+                           status_choices=database_utils.STATUS_CHOICES,
+                           display_choices=(database_utils.
+                                            STATUS_DISPLAY_CHOICES))
 
     class Meta(object):
         name = "databases"
@@ -677,20 +703,27 @@ class InstancesTable(tables.DataTable):
         row_actions = (CreateBackup,
                        ResizeVolume,
                        ResizeInstance,
-                       PromoteToReplicaSource,
                        AttachConfiguration,
                        DetachConfiguration,
-                       ManageRoot,
+                       PromoteToReplicaSource,
                        EjectReplicaSource,
                        DetachReplica,
+                       ViewReplicas,
+                       ManageRoot,
+                       upgrade_tables.UpgradeInstanceAction,
+                       schedules_tables.ViewSchedules,
+                       couchbase_tables.ManageBuckets,
                        RestartInstance,
-                       DeleteInstance)
+                       DeleteInstance,
+                       ResetStatusAction,
+                       ForceDeleteAction)
 
 
 class UsersTable(tables.DataTable):
     name = tables.Column("name", verbose_name=_("User Name"))
     host = tables.Column("host", verbose_name=_("Allowed Host"))
     databases = tables.Column(get_databases, verbose_name=_("Databases"))
+    roles = tables.Column(get_roles, verbose_name=_("Roles"))
 
     class Meta(object):
         name = "users"
