@@ -12,7 +12,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.template import defaultfilters as d_filters
 from django.utils.translation import pgettext_lazy
@@ -70,29 +69,6 @@ class RestoreLink(tables.LinkAction):
     def get_link_url(self, datum):
         url = reverse(self.url)
         return url + '?backup=%s' % datum.id
-
-
-class DownloadBackup(tables.LinkAction):
-    name = "download"
-    verbose_name = _("Download Backup")
-    url = 'horizon:project:containers:object_download'
-    classes = ("btn-download",)
-
-    def get_link_url(self, datum):
-        ref = datum.locationRef.split('/')
-        container_name = ref[5]
-        object_path = '/'.join(ref[6:])
-        return reverse(self.url,
-                       kwargs={'container_name': container_name,
-                               'object_path': object_path})
-
-    def allowed(self, request, datum):
-        legacy_swift_panel_enabled = False
-        if ('swift_panel' in settings.HORIZON_CONFIG and
-                settings.HORIZON_CONFIG['swift_panel'] == 'legacy' and
-                datum.status == 'COMPLETED'):
-            legacy_swift_panel_enabled = True
-        return legacy_swift_panel_enabled
 
 
 class DeleteBackup(tables.DeleteAction):
@@ -188,4 +164,4 @@ class BackupsTable(tables.DataTable):
         status_columns = ["status"]
         row_class = UpdateRow
         table_actions = (LaunchLink, DeleteBackup)
-        row_actions = (RestoreLink, DownloadBackup, DeleteBackup)
+        row_actions = (RestoreLink, DeleteBackup)
