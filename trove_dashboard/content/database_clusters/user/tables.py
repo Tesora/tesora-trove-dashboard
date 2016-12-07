@@ -61,7 +61,7 @@ class DeleteUser(tables.DeleteAction):
         user = self.table.get_object_by_id(obj_id)
         api.trove.user_delete(request, self.table.kwargs['cluster_id'],
                               user.name,
-                              host=user.host)
+                              host=getattr(user, 'host', None))
 
 
 class EditUser(tables.LinkAction):
@@ -79,7 +79,7 @@ class EditUser(tables.LinkAction):
         return urlresolvers.reverse(self.url,
                                     args=[self.table.kwargs['cluster_id'],
                                           user.name,
-                                          user.host])
+                                          getattr(user, 'host', None)])
 
 
 class ManageUsers(tables.LinkAction):
@@ -110,7 +110,7 @@ class ManageAccess(tables.LinkAction):
         return urlresolvers.reverse(self.url,
                                     args=[self.table.kwargs['cluster_id'],
                                           user.name,
-                                          user.host])
+                                          getattr(user, 'host', None)])
 
 
 class UsersTable(databases_tables.UsersTable):
