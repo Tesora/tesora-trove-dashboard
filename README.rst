@@ -59,6 +59,29 @@ that allows you to bypass the compress and collectstatic as well.
 Settings
 ~~~~~~~~
 
+The use of a cross-process cache such as Memcached is required.
+
+Install Memcached itself and a Memcached binding such as python-memcached.
+
+For a single horizon instance use the CACHES setting like the example below.
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+        'LOCATION': '127.0.0.1:11211',
+    },
+}
+
+For multiple horizon instances behind a load balancer configure each instance
+to use the same cache like the example below.
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+        'LOCATION': [u'10.2.100.133:11211', u'10.2.100.134:11211'']
+    },
+}
+
 The following optional settings provide a way to override the default
 volume sizes provided in the new instance and new cluster dialogs:
 
