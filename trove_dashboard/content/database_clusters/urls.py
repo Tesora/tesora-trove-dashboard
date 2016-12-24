@@ -15,7 +15,6 @@
 #    under the License.
 
 from django.conf.urls import include  # noqa
-from django.conf.urls import patterns  # noqa
 from django.conf.urls import url  # noqa
 
 from trove_dashboard.content.database_clusters.configurations import (
@@ -34,8 +33,7 @@ BASECLUSTERS = r'^(?P<cluster_id>[^/]+)/%s'
 CLUSTERS = BASECLUSTERS + '$'
 BASEINSTANCES = r'^(?P<instance_id>[^/]+)/%s'
 
-urlpatterns = patterns(
-    '',
+urlpatterns = [
     url(r'^$', views.IndexView.as_view(), name='index'),
     url(r'^launch$', views.LaunchClusterView.as_view(), name='launch'),
     url(r'^(?P<cluster_id>[^/]+)/$', views.DetailView.as_view(),
@@ -65,4 +63,4 @@ urlpatterns = patterns(
         include(upgrade_urls, namespace='upgrade')),
     url(BASECLUSTERS % 'user/',
         include(user_urls, namespace='user')),
-)
+]

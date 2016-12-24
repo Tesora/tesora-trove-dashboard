@@ -13,7 +13,6 @@
 #    under the License.
 
 from django.conf.urls import include
-from django.conf.urls import patterns
 from django.conf.urls import url
 
 from trove_dashboard.content.databases.couchbase import urls as couchbase_urls
@@ -28,14 +27,10 @@ USERS = r'^(?P<instance_id>[^/]+)/(?P<user_name>[^/]+)/' \
         r'(?P<user_host>[^/]+)/%s$'
 
 
-urlpatterns = patterns(
-    '',
-    url(r'^$', views.IndexView.as_view(),
-        name='index'),
-    url(r'^launch$', views.LaunchInstanceView.as_view(),
-        name='launch'),
-    url(INSTANCES % '', views.DetailView.as_view(),
-        name='detail'),
+urlpatterns = [
+    url(r'^$', views.IndexView.as_view(), name='index'),
+    url(r'^launch$', views.LaunchInstanceView.as_view(), name='launch'),
+    url(INSTANCES % '', views.DetailView.as_view(), name='detail'),
     url(INSTANCES % 'create_database', views.CreateDatabaseView.as_view(),
         name='create_database'),
     url(INSTANCES % 'resize_volume', views.ResizeVolumeView.as_view(),
@@ -62,4 +57,4 @@ urlpatterns = patterns(
         include(schedules_urls, namespace='schedules')),
     url(BASEINSTANCES % 'upgrade/',
         include(upgrade_urls, namespace='upgrade')),
-)
+]
